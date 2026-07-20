@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create a Simple React Project & Host on GitHub Pages – Interactive Guide</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            background: #f4f7f9;
+            color: #333;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+            padding: 30px 25px;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1a1a2e;
+            margin-bottom: 0.3rem;
+            text-align: center;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.05rem;
+        }
+        .progress-container {
+            background: #e9ecef;
+            border-radius: 20px;
+            height: 12px;
+            margin: 25px 0 35px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(135deg, #0fa3b1, #5c7aff);
+            border-radius: 20px;
+            transition: width 0.3s ease;
+        }
+        .progress-text {
+            text-align: center;
+            font-weight: 600;
+            margin-top: 5px;
+            font-size: 0.9rem;
+            color: #555;
+        }
+        .step {
+            border: 1px solid #dde1e7;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            overflow: hidden;
+            transition: all 0.2s ease;
+            background: #fff;
+        }
+        .step.active {
+            border-color: #5c7aff;
+            box-shadow: 0 4px 12px rgba(92, 122, 255, 0.1);
+        }
+        .step-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            background: #fafbfc;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        .step-header:hover {
+            background: #f0f3f8;
+        }
+        .step-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #1a1a2e;
+        }
+        .step-number {
+            background: #e2e6ef;
+            color: #1a1a2e;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+        .step-checkbox {
+            width: 22px;
+            height: 22px;
+            cursor: pointer;
+            accent-color: #5c7aff;
+            transform: scale(1.1);
+            margin-left: 10px;
+            flex-shrink: 0;
+        }
+        .step-content {
+            padding: 0 20px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.35s ease, padding 0.35s ease;
+            background: #fff;
+        }
+        .step.expanded .step-content {
+            max-height: 2000px; /* enough for all content */
+            padding: 18px 20px;
+        }
+        .step.expanded .step-header {
+            background: #f0f4ff;
+            border-bottom: 1px solid #dde1e7;
+        }
+        pre {
+            background: #1e1e2f;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            position: relative;
+            margin: 12px 0;
+        }
+        code {
+            font-family: 'Fira Code', 'Courier New', monospace;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background: #5c7aff;
+            border: none;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .copy-btn:hover {
+            background: #4a64e0;
+        }
+        .copy-btn.copied {
+            background: #2d6a4f;
+        }
+        .note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px 15px;
+            margin: 15px 0;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+        .note strong {
+            color: #856404;
+        }
+        .inline-code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+        .bold {
+            font-weight: 600;
+        }
+        ul, ol {
+            padding-left: 25px;
+            margin: 10px 0;
+        }
+        li {
+            margin-bottom: 5px;
+        }
+        button.reset-progress {
+            display: block;
+            margin: 20px auto 0;
+            background: none;
+            border: 1px solid #aaa;
+            padding: 6px 18px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: #555;
+            transition: 0.2s;
+        }
+        button.reset-progress:hover {
+            background: #f2f2f2;
+        }
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px 15px;
+            }
+            .step-header {
+                padding: 14px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🚀 Create a React Project &amp; Host on GitHub Pages</h1>
+    <p class="subtitle">Interactive step‑by‑step guide for absolute beginners</p>
+
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <p class="progress-text" id="progressText">0 of 10 steps completed</p>
+
+    <!-- Step 1 -->
+    <div class="step" id="step1">
+        <div class="step-header" onclick="toggleStep('step1')">
+            <span class="step-title"><span class="step-number">1</span> Check Node.js installation</span>
+            <input type="checkbox" class="step-checkbox" onclick="event.stopPropagation(); updateProgress()" aria-label="Mark step 1 complete">
+        </div>
+        <div class="step-content">
+            <p>React needs <strong>Node.js</strong>. Open a terminal (in VS Code: <span class="inline-code">Terminal → New Terminal</span>) and check versions:</p>
+            <pre><code>node -v</code><button class="copy-btn" onclick="copyCode(this, 'node -v')">Copy</button></pre>
+            <p>Expected output: <code>v18.17.0</code> or higher.</p>
+            <pre><code>npm -v</code><button class="copy-btn" onclick="copyCode(this, 'npm -v')">Copy</button></pre>
+            <p>Expected output: <code>9.6.7</code> or higher.</p>
+            <div class="note">
+                <strong>If not installed:</strong> Download LTS version from <a href="https://nodejs.org" target="_blank">nodejs.org</a> (left button). Restart terminal after installation.
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step" id="step2">
+        <div class="step-header" onclick="toggleStep('step2')">
+            <span class="step-title"><span class="step-number">2</span> Create a React project with Vite</span>
+            <input type="checkbox" class="step-checkbox" onclick="event.stopPropagation(); updateProgress()" aria-label="Mark step 2 complete">
+        </div>
+        <div class="step-content">
+            <p>Navigate to your desired folder (e.g., Desktop) and run the Vite creator:</p>
+            <pre><code>cd Desktop</code><button class="copy-btn" onclick="copyCode(this, 'cd Desktop')">Copy</button></pre>
+            <pre><code>npm create vite@latest my-react-page -- --template react</code><button class="copy-btn" onclick="copyCode(this, 'npm create vite@latest my-react-page -- --template react')">Copy</button></pre>
+            <p>When prompted to install <code>create-vite@latest</code>, type <strong>y</strong> and Enter.</p>
+            <pre><code>cd my-react-page</code><button class="copy-btn" onclick="copyCode(this, 'cd my-react-page')">Copy</button></pre>
+            <pre><code>npm install</code><button class="copy-btn" onclick="copyCode(this, 'npm install')">Copy</button></pre>
+            <p>Open the folder in VS Code:</p>
+            <pre><code>code .</code><button class="copy-btn" onclick="copyCode(this, 'code .')">Copy</button></pre>
+        </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step" id="step3">
+        <div class="step-header" onclick="toggleStep('step3')">
+            <span class="step-title"><span class="step-number">3</span> Explore project structure</span>
+            <input type="checkbox" class="step-checkbox" onclick="event.stopPropagation(); updateProgress()" aria-label="Mark step 3 complete">
+        </div>
+        <div class="step-content">
+            <p>In VS Code’s file explorer you’ll see:</p>
+            <ul>
+                <li><code>index.html</code> – the main HTML page.</li>
+                <li><code>src/</code> – all React code.
+                    <ul>
+                        <li><code>main.jsx</code> – entry point</li>
+                        <li><code>App.jsx</code> – main component we’ll edit</li>
+                        <li><code>App.css</code> – styles for App</li>
+                    </ul>
+                </li>
+                <li><code>package.json</code> – project configuration</li>
+            </ul>
+            <p>We’ll only touch <code>App.jsx</code> and <code>package.json</code>.</p>
+        </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step" id="step4">
+        <div class="step-header" onclick="toggleStep('step4')">
+            <span class="step-title"><span class="step-number">4</span> Run the app locally</span>
+            <input type="checkbox" class="step-checkbox" onclick="event.stopPropagation(); updateProgress()" aria-label="Mark step 4 complete">
+        </div>
+        <div class="step-content">
+            <pre><code>npm run dev</code><button class="copy-btn" onclick="copyCode(this, 'npm run dev')">Copy</button></pre>
+            <p>Look for <code>http://localhost:5173/</code> in the terminal, hold <strong>Ctrl</strong> (or Cmd) and click it. The browser will show a Vite + React starter page.</p>
+            <p>Keep the server running. To stop later, press <strong>Ctrl+C</strong>.</p>
+        </div>
+    </div>
+
+    <!-- Step 5 -->
+    <div class="step" id="step5">
+        <div class="step-header" onclick="toggleStep('step5')">
+            <span class="step-title"><span class="step-number">5</span> Customise the App component</span>
+            <input type="checkbox" class="step-checkbox" onclick="event.stopPropagation(); updateProgress()" aria-label="Mark step 5 complete">
+        </div>
+        <div class="step-content">
+            <p>Open <code>src/App.jsx</code>, delete everything and replace with:</p>
+            <pre><code>import './App.css'
+
+function App() {
+  return (
+    &lt;div className="App"&gt;
+      &lt;h1&gt;Hello, World!&lt;/h1&gt;
+      &lt;p&gt;Welcome to my first React site 🚀&lt;/p&gt;
+    &lt;/div&gt;
+  )
+}
+
+export default App</code><button class="copy-btn" onclick="copyCode(this, `import './App.css'\n\nfunction App() {\n  return (\n    <div className=\"App\">\n      <h1>Hello, World!</h1>\n      <p>Welcome to my first React site 🚀</p>\n    </div>\n  )\n}\n\nexport default App`)">Copy</button></pre>
+
+            <p>Open <code>src/App.css</code>, delete contents and add:</p>
+            <pre><code>.App {
+  text-align: center;
+  margin-top: 80px;
+  font-family: Arial, sans-serif;
+}
+
+h1 {
+  color: #333;
+}
+
+p {
+  color: #666;
+  font-size: 1.2rem;
+}</code><button class="copy-btn" onclick="copyCode(this, `.App {\n  text-align: center;\n  margin-top: 80px;\n  font-family: Arial, sans-serif;\n}\n\nh1 {\n  color: #333;\n}\n\np {\n  color: #666;\n  font-size: 1.2rem;\n}`)">Copy</button></pre>
+            <p>Save both files (<strong>Ctrl+S</strong>). Your live preview updates instantly.</p>
+        </div>
+    </div>
+
+    <!-- Step 6 -->
+    <div class="step" id="step6">
+        <div class="step-header" onclick="toggleStep('step6')">
+            <span class="step-title"><span class="step-number">6</span> Prepare for GitHub Pages</span>
+            <input type="checkbox" class="step-checkbox" onclick="event.stopPropagation(); updateProgress()" aria-label="Mark step 6 complete">
+        </div>
+        <div class="step-content">
+            <p><strong>a) Install <code>gh-pages</code> package:</strong></p>
+            <pre><code>npm install gh-pages --save-dev</code><button class="copy-btn" onclick="copyCode(this, 'npm install gh-pages --save-dev')">Copy</button></pre>
+
+            <p><strong>b) Set homepage URL in <code>package.json</code>:</strong><br>
+            Add this line right after <code>"version"</code> (replace username and repo name):</p>
+            <pre><code>"homepage": "https://yourusername.github.io/my-react-page",</code><button class="copy-btn" onclick="copyCode(this, '\"homepage\": \"https://yourusername.github.io/my-react-page\",')">Copy</button></pre>
+
+            <p><strong>c) Add deploy scripts:</strong> In <code>"scripts"</code> section of <code>package.json</code>, add:</p>
+            <pre><code>"predeploy": "npm run build",
+"deploy": "gh-pages -d dist"</code><button class="copy-btn" onclick="copyCode(this, '\"predeploy\": \"npm run build\",\n\"deploy\": \"gh-pages -d dist\"')">Copy</button></pre>
+            <p>Ensure the last script doesn’t have a trailing comma. Example final scripts:</p>
+            <pre><code>"scripts": {
+  "dev": "vite",
+  "build": "vite build",
+  "preview": "vite preview",
+  "predeploy": "npm run build",
+  "deploy": "gh-pages -d dist"
+}</code><button class="copy-btn" onclick="copyCode(this, `\"scripts\": {\n  \"dev\": \"vite\",\n  \"build\": \"vite build\",\n  \"preview\": \"vite preview\",\n  \"predeploy\": \"npm run build\",\n  \"deploy\": \"gh-pages -d dist\"\n}`)">Copy</button></pre>
+        </div>
+    </div>
+
+    <!-- Step 7 -->
+    <div class="step" id="step7">
+        <div class="step-header" onclick="toggleStep('step7')">
+            <span class="step-title"><span class="step-number">7</span> Fix asset paths for GitHub Pages</span>
+            <input type="checkbox" class="step-checkbox" onclick="event.stopPropagation(); updateProgress()" aria-label="Mark step 7 complete">
+        </div>
+        <div class="step-content">
+            <p>Open <code>vite.config.js</code> and add a <code>base</code> property (use your repo name):</p>
+            <pre><code>import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  base: '/my-react-page/',   // &lt;-- your repo name here
+})</code><button class="copy-btn" onclick="copyCode(this, `import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\n\nexport default defineConfig({\n  plugins: [react()],\n  base: '/my-react-page/',\n})`)">Copy</button></pre>
+            <div class="note"><strong>Important:</strong> The <code>base</code> value must match your GitHub repository name exactly (case‑sensitive), with slashes.</div>
+        </div>
+    </div>
+
+    <!-- Step 8 -->
+    <div class="step" id="step8">
+        <div class="step-header" onclick="toggleStep('step8')">
+            <span class="step-title"><span class="step-number">8</span> Create a GitHub repo and push code</span>
+            <input type="checkbox" class="step-checkbox" onclick="event.stopPropagation(); updateProgress()" aria-label="Mark step 8 complete">
+        </div>
+        <div class="step-content">
+            <p><strong>Using GitHub Desktop:</strong></p>
+            <ol>
+                <li>In GitHub Desktop, <strong>File → Add local repository</strong>, choose your <code>my-react-page</code> folder.</li>
+                <li>If warned “not a Git repository”, click <strong>create a repository</strong>.</li>
+                <li>Click <strong>Publish repository</strong> (top right).</li>
+                <li>Name it <code>my-react-page</code> (exactly as in previous steps), keep it <strong>Public</strong>.</li>
+                <li>Click <strong>Publish Repository</strong>.</li>
+            </ol>
+            <p>Now your code is on GitHub at <code>https://github.com/&lt;your-username&gt;/my-react-page</code>.</p>
+        </div>
+    </div>
+
+    <!-- Step 9 -->
+    <div class="step" id="step9">
+        <div class="step-header" onclick="toggleStep('step9')">
+            <span class="step-title"><span class="step-number">9</span> Deploy to GitHub Pages</span>
+            <input type="checkbox" class="step-checkbox" onclick="event.stopPropagation(); updateProgress()" aria-label="Mark step 9 complete">
+        </div>
+        <div class="step-content">
+            <p>In your terminal (inside the project folder), run:</p>
+            <pre><code>npm run deploy</code><button class="copy-btn" onclick="copyCode(this, 'npm run deploy')">Copy</button></pre>
+            <p>This builds the app and pushes the <code>dist</code> folder to a <code>gh-pages</code> branch.</p>
+            <p>After it finishes, go to your GitHub repository → <strong>Settings</strong> → <strong>Pages</strong>. Under “Branch”, select <code>gh-pages</code> and <code>/ (root)</code>, then click <strong>Save</strong>.</p>
+            <p>After a minute or two you’ll see: <em>“Your site is live at https://...github.io/my-react-page/”</em></p>
+            <p>Visit that URL – your React app is live! 🎉</p>
+        </div>
+    </div>
+
+    <!-- Step 10 -->
+    <div class="step" id="step10">
+        <div class="step-header" onclick="toggleStep('step10')">
+            <span class="step-title"><span class="step-number">10</span> Update your site in the future</span>
+            <input type="checkbox" class="step-checkbox" onclick="event.stopPropagation(); updateProgress()" aria-label="Mark step 10 complete">
+        </div>
+        <div class="step-content">
+            <ul>
+                <li>Make code changes and save files.</li>
+                <li>Test locally with <code>npm run dev</code>.</li>
+                <li>Commit and push using GitHub Desktop (summary → “Commit to main” → “Push origin”).</li>
+                <li>Run <code>npm run deploy</code> again.</li>
+            </ul>
+            <p>Your live site will update in a minute or two.</p>
+        </div>
+    </div>
+
+    <!-- Troubleshooting accordion -->
+    <div class="step" id="troubleshooting">
+        <div class="step-header" onclick="toggleStep('troubleshooting')">
+            <span class="step-title"><span class="step-number" style="background:#f0ad4e;color:white;">⚠️</span> Troubleshooting common issues</span>
+            <input type="checkbox" class="step-checkbox" style="visibility:hidden;" disabled>
+        </div>
+        <div class="step-content">
+            <ul>
+                <li><strong>Blank page after deployment?</strong> – Double‑check <code>base</code> in <code>vite.config.js</code> and <code>homepage</code> in <code>package.json</code>.</li>
+                <li><strong>“fatal: not a git repository”</strong> – Use GitHub Desktop to create/publish the repository.</li>
+                <li><strong>gh‑pages command not found</strong> – Run <code>npm install gh-pages --save-dev</code> again.</li>
+            </ul>
+        </div>
+    </div>
+
+    <button class="reset-progress" onclick="resetProgress()">Reset progress</button>
+</div>
+
+<script>
+    // Toggle step expansion
+    function toggleStep(stepId) {
+        const step = document.getElementById(stepId);
+        step.classList.toggle('expanded');
+    }
+
+    // Copy code to clipboard
+    function copyCode(button, text) {
+        navigator.clipboard.writeText(text).then(() => {
+            button.textContent = 'Copied!';
+            button.classList.add('copied');
+            setTimeout(() => {
+                button.textContent = 'Copy';
+                button.classList.remove('copied');
+            }, 2000);
+        }).catch(() => {
+            alert('Copy failed. Please manually copy the command.');
+        });
+    }
+
+    // Update progress bar and text
+    function updateProgress() {
+        const checkboxes = document.querySelectorAll('.step-checkbox:not([disabled])');
+        const total = checkboxes.length;
+        const completed = Array.from(checkboxes).filter(cb => cb.checked).length;
+        const percent = total ? Math.round((completed / total) * 100) : 0;
+
+        document.getElementById('progressBar').style.width = percent + '%';
+        document.getElementById('progressText').textContent = `${completed} of ${total} steps completed`;
+
+        // Save progress in localStorage
+        const stepStates = {};
+        checkboxes.forEach((cb, idx) => {
+            stepStates[idx] = cb.checked;
+        });
+        localStorage.setItem('reactGuideProgress', JSON.stringify(stepStates));
+    }
+
+    // Load saved progress on page load
+    function loadProgress() {
+        const saved = localStorage.getItem('reactGuideProgress');
+        if (saved) {
+            const stepStates = JSON.parse(saved);
+            const checkboxes = document.querySelectorAll('.step-checkbox:not([disabled])');
+            checkboxes.forEach((cb, idx) => {
+                if (stepStates[idx]) cb.checked = true;
+            });
+        }
+        updateProgress();
+    }
+
+    // Reset all checkboxes and progress
+    function resetProgress() {
+        const checkboxes = document.querySelectorAll('.step-checkbox:not([disabled])');
+        checkboxes.forEach(cb => cb.checked = false);
+        updateProgress();
+    }
+
+    // Attach event listeners to all checkboxes
+    document.querySelectorAll('.step-checkbox:not([disabled])').forEach(cb => {
+        cb.addEventListener('change', updateProgress);
+    });
+
+    // Initial load
+    loadProgress();
+
+    // Optionally expand the first step by default
+    // document.getElementById('step1').classList.add('expanded');
+</script>
+</body>
+</html>

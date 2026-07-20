@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build Log: React App → GitHub Pages</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #EEF3F8;
+    --bg-grid: rgba(44,95,138,0.07);
+    --paper: #FFFFFF;
+    --ink: #16324F;
+    --ink-soft: #4B6579;
+    --accent: #2C5F8A;
+    --accent-strong: #123C5C;
+    --warn: #C98A2C;
+    --warn-bg: #FCF3E3;
+    --success: #2E7D53;
+    --success-bg: #E8F5EC;
+    --code-bg: #0F2A3F;
+    --code-text: #D7E6F2;
+    --code-key: #7FB2DE;
+    --border: #C3D3E0;
+    --border-soft: #D9E4EC;
+    --radius: 6px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(var(--bg-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+    background-size: 28px 28px;
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+  }
+  .wrap{
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 20px 80px;
+  }
+  header.masthead{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:16px;
+    border-bottom: 2px solid var(--accent-strong);
+    padding-bottom: 18px;
+    margin-bottom: 26px;
+  }
+  .title-block h1{
+    font-family:'JetBrains Mono', monospace;
+    font-weight:800;
+    font-size: clamp(1.5rem, 3vw, 2.1rem);
+    margin: 0 0 6px;
+    color: var(--accent-strong);
+    letter-spacing: -0.01em;
+  }
+  .title-block p{
+    margin:0;
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+  }
+  .sheet-meta{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    text-align:right;
+    color: var(--ink-soft);
+    line-height:1.5;
+    border: 1px solid var(--border);
+    background: var(--paper);
+    padding: 8px 12px;
+    border-radius: var(--radius);
+  }
+  .sheet-meta strong{ color: var(--accent-strong); }
+
+  .meter-row{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin-bottom: 28px;
+  }
+  .meter-track{
+    flex:1;
+    height: 10px;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    overflow:hidden;
+  }
+  .meter-fill{
+    height:100%;
+    width:0%;
+    background: linear-gradient(90deg, var(--accent), var(--success));
+    transition: width 0.4s ease;
+  }
+  .meter-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    font-weight:600;
+    color: var(--accent-strong);
+    white-space:nowrap;
+    min-width: 92px;
+    text-align:right;
+  }
+
+  .layout{
+    display:grid;
+    grid-template-columns: 260px 1fr;
+    gap: 22px;
+    align-items:start;
+  }
+  @media (max-width: 860px){
+    .layout{ grid-template-columns: 1fr; }
+    nav.toc{ position: static !important; }
+  }
+
+  nav.toc{
+    position: sticky;
+    top: 20px;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px;
+  }
+  nav.toc button{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    width:100%;
+    text-align:left;
+    background: none;
+    border: none;
+    padding: 10px 10px;
+    border-radius: 4px;
+    cursor:pointer;
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size: 0.87rem;
+    color: var(--ink-soft);
+    border-left: 3px solid transparent;
+  }
+  nav.toc button:hover{ background: var(--bg); }
+  nav.toc button.active{
+    background: var(--bg);
+    color: var(--accent-strong);
+    font-weight:600;
+    border-left: 3px solid var(--accent);
+  }
+  nav.toc .tag{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+    min-width: 44px;
+  }
+  nav.toc .check{
+    width: 15px; height:15px;
+    border-radius:3px;
+    border: 1.5px solid var(--border);
+    flex-shrink:0;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size: 10px;
+    color: white;
+  }
+  nav.toc .check.done{
+    background: var(--success);
+    border-color: var(--success);
+  }
+
+  main.panel{
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 30px 34px;
+    min-height: 400px;
+  }
+  .step-eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 6px;
+  }
+  .step-title{
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700;
+    font-size: 1.5rem;
+    margin: 0 0 18px;
+    color: var(--accent-strong);
+  }
+  .panel h3{
+    font-family:'JetBrains Mono', monospace;
+    color: var(--accent-strong);
+    font-size: 1.05rem;
+    margin: 26px 0 10px;
+  }
+  .panel p{ line-height:1.65; margin: 0 0 14px; }
+  .panel ul, .panel ol{ line-height:1.7; padding-left: 22px; margin: 0 0 14px;}
+  .panel table{ width:100%; border-collapse: collapse; margin: 10px 0 18px; font-size:0.9rem;}
+  .panel th, .panel td{ border: 1px solid var(--border-soft); padding: 8px 10px; text-align:left; vertical-align:top;}
+  .panel th{ background: var(--bg); font-family:'JetBrains Mono', monospace; font-size:0.78rem; }
+
+  .callout{
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: 0.9rem;
+    line-height:1.6;
+  }
+  .callout.note{ background: var(--warn-bg); border: 1px solid #EAD2A3; color:#7A5411; }
+  .callout.note strong{ color:#7A5411; }
+
+  .code-block{
+    position:relative;
+    margin: 14px 0 18px;
+  }
+  .code-block pre{
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: 16px 44px 16px 16px;
+    border-radius: var(--radius);
+    overflow-x:auto;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.84rem;
+    line-height:1.6;
+    margin:0;
+  }
+  .code-block .copy-btn{
+    position:absolute;
+    top:8px; right:8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: var(--code-text);
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor:pointer;
+  }
+  .code-block .copy-btn:hover{ background: rgba(255,255,255,0.18); }
+  .code-block .copy-btn.copied{ background: var(--success); border-color: var(--success); color:white; }
+  code.inline{
+    font-family:'JetBrains Mono', monospace;
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.88em;
+  }
+
+  .checklist-item{
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--border-soft);
+  }
+  .checklist-item:last-child{ border-bottom:none; }
+  .checklist-item input{ margin-top: 4px; width:16px; height:16px; accent-color: var(--success); flex-shrink:0;}
+  .checklist-item label{ line-height:1.55; }
+
+  .nav-buttons{
+    display:flex;
+    justify-content:space-between;
+    margin-top: 32px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-soft);
+  }
+  .nav-buttons button{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    font-weight:600;
+    padding: 10px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--accent);
+    background: var(--paper);
+    color: var(--accent-strong);
+    cursor:pointer;
+  }
+  .nav-buttons button.primary{
+    background: var(--accent-strong);
+    color: white;
+    border-color: var(--accent-strong);
+  }
+  .nav-buttons button:disabled{
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  .nav-buttons button:hover:not(:disabled){ filter: brightness(1.05); }
+
+  .done-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--success);
+    background: var(--success-bg);
+    border: 1px solid #BFE2CC;
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-left: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="title-block">
+      <h1>BUILD LOG — REACT → GITHUB PAGES</h1>
+      <p>A step-by-step deployment record. Check off each stage as you complete it.</p>
+    </div>
+    <div class="sheet-meta">
+      DRAWING NO. <strong>RGP-01</strong><br>
+      SCALE: 1:1 (no steps skipped)<br>
+      REV: 2026-07-20
+    </div>
+  </header>
+
+  <div class="meter-row">
+    <span class="meter-label" id="meterLabel">0 / 9 done</span>
+    <div class="meter-track"><div class="meter-fill" id="meterFill"></div></div>
+  </div>
+
+  <div class="layout">
+    <nav class="toc" id="toc"></nav>
+    <main class="panel" id="panel"></main>
+  </div>
+</div>
+
+<script>
+const steps = [
+{
+  tag: "SHT-00",
+  title: "The big picture",
+  eyebrow: "Overview",
+  body: `
+    <p>Before touching anything, here's what each tool actually does:</p>
+    <ul>
+      <li><strong>React</strong> — a JavaScript tool for building websites/apps.</li>
+      <li><strong>Node.js</strong> — lets your computer run JavaScript outside a browser. Required to build a React app.</li>
+      <li><strong>npm</strong> — "Node Package Manager," bundled with Node.js. Downloads libraries and runs project commands.</li>
+      <li><strong>Vite</strong> ("veet") — sets up a React project for you and converts your code into browser-ready files.</li>
+      <li><strong>Git</strong> — tracks changes to your code over time.</li>
+      <li><strong>GitHub</strong> — a website that stores your code (using Git) and can host your finished app for free via "GitHub Pages."</li>
+      <li><strong>The terminal</strong> — a text window where you type commands instead of clicking. Every command below is explained.</li>
+    </ul>
+    <h3>The path ahead</h3>
+    <ol>
+      <li>Install Node.js, Git, and a code editor</li>
+      <li>Create a GitHub account</li>
+      <li>Create a React project on your computer</li>
+      <li>Build a simple data app</li>
+      <li>Put the project's code on GitHub</li>
+      <li>Turn on GitHub Pages so the app goes live</li>
+    </ol>
+  `,
+  checklist: ["I understand roughly what each tool is for"]
+},
+{
+  tag: "SHT-01",
+  title: "Install a code editor",
+  eyebrow: "Prerequisites · 1 of 6",
+  body: `
+    <p>Download <strong>VS Code</strong> (free): <code class="inline">https://code.visualstudio.com</code></p>
+    <p>Install it like any normal application — double-click the downloaded file and click through the installer with default options.</p>
+  `,
+  checklist: ["VS Code is installed and opens"]
+},
+{
+  tag: "SHT-02",
+  title: "Install Node.js and npm",
+  eyebrow: "Prerequisites · 2 of 6",
+  body: `
+    <p>Go to <code class="inline">https://nodejs.org</code> and download the <strong>LTS</strong> version (LTS = "Long Term Support," the stable recommended one — not "Current"). Run the installer with default options.</p>
+    <h3>Verify it worked</h3>
+    <p>Open a terminal — <strong>Windows:</strong> Start menu → type <code class="inline">PowerShell</code> → Enter. <strong>Mac:</strong> <code class="inline">Cmd+Space</code> → type <code class="inline">Terminal</code> → Enter.</p>
+    <div class="code-block"><pre data-code="node -v">node -v</pre><button class="copy-btn">Copy</button></div>
+    <p>You should see something like <code class="inline">v20.11.0</code>. Then:</p>
+    <div class="code-block"><pre data-code="npm -v">npm -v</pre><button class="copy-btn">Copy</button></div>
+    <div class="callout note"><strong>If you see "command not found":</strong> restart your computer and try again — this resolves it most of the time.</div>
+  `,
+  checklist: ["node -v prints a version number", "npm -v prints a version number"]
+},
+{
+  tag: "SHT-03",
+  title: "Install Git",
+  eyebrow: "Prerequisites · 3 of 6",
+  body: `
+    <p>Go to <code class="inline">https://git-scm.com/downloads</code>, download for your OS, and click through the defaults (Windows has many screens — defaults are fine).</p>
+    <h3>Verify it worked</h3>
+    <div class="code-block"><pre data-code="git --version">git --version</pre><button class="copy-btn">Copy</button></div>
+    <p>You should see something like <code class="inline">git version 2.43.0</code>.</p>
+  `,
+  checklist: ["git --version prints a version number"]
+},
+{
+  tag: "SHT-04",
+  title: "Create a GitHub account",
+  eyebrow: "Prerequisites · 4 of 6",
+  body: `
+    <p>Go to <code class="inline">https://github.com</code> and sign up if you don't already have an account. Remember your username — you'll need it later.</p>
+  `,
+  checklist: ["I have a GitHub account and know my username"]
+},
+{
+  tag: "SHT-05",
+  title: "Tell Git who you are",
+  eyebrow: "Prerequisites · 5 of 6",
+  body: `
+    <p>One-time setup. Replace the name and email with your own (use the same email as your GitHub account):</p>
+    <div class="code-block"><pre data-code='git config --global user.name "Your Name"'>git config --global user.name "Your Name"</pre><button class="copy-btn">Copy</button></div>
+    <div class="code-block"><pre data-code='git config --global user.email "your.email@example.com"'>git config --global user.email "your.email@example.com"</pre><button class="copy-btn">Copy</button></div>
+    <p>Nothing visibly happens — that's normal. It saves this info for future commits.</p>
+  `,
+  checklist: ["I've set my git user.name and user.email"]
+},
+{
+  tag: "SHT-06",
+  title: "Sign in to GitHub from the terminal",
+  eyebrow: "Prerequisites · 6 of 6 (recommended)",
+  body: `
+    <p>Install <strong>GitHub CLI</strong>: <code class="inline">https://cli.github.com</code>, then run:</p>
+    <div class="code-block"><pre data-code="gh auth login">gh auth login</pre><button class="copy-btn">Copy</button></div>
+    <p>Follow the prompts: GitHub.com → HTTPS → login with a web browser. This saves you from typing passwords later.</p>
+    <div class="callout note"><strong>Feeling lost?</strong> Skip this for now — there's a browser-based login fallback when you push code later.</div>
+  `,
+  checklist: ["I ran gh auth login, or I'm deliberately skipping it"]
+},
+{
+  tag: "SHT-07",
+  title: "Create the React project",
+  eyebrow: "Build · project setup",
+  body: `
+    <h3>Pick a folder</h3>
+    <div class="code-block"><pre data-code="cd ~
+mkdir Projects
+cd Projects">cd ~
+mkdir Projects
+cd Projects</pre><button class="copy-btn">Copy</button></div>
+    <p><code class="inline">cd ~</code> moves into your home folder, <code class="inline">mkdir Projects</code> creates a new folder, <code class="inline">cd Projects</code> moves into it.</p>
+
+    <h3>Generate the project with Vite</h3>
+    <div class="code-block"><pre data-code="npm create vite@latest my-data-app -- --template react">npm create vite@latest my-data-app -- --template react</pre><button class="copy-btn">Copy</button></div>
+    <p>Creates a folder <code class="inline">my-data-app</code> with a working React project. Type <code class="inline">y</code> and Enter if asked to confirm a package install.</p>
+
+    <div class="code-block"><pre data-code="cd my-data-app
+npm install">cd my-data-app
+npm install</pre><button class="copy-btn">Copy</button></div>
+    <p><code class="inline">npm install</code> downloads all the libraries the project needs.</p>
+
+    <h3>Run it locally</h3>
+    <div class="code-block"><pre data-code="npm run dev">npm run dev</pre><button class="copy-btn">Copy</button></div>
+    <p>Open the printed URL (usually <code class="inline">http://localhost:5173</code>) in your browser. You should see the default Vite starter page. <strong>Leave this terminal running</strong> — it auto-refreshes on save. Open a new terminal tab for other commands.</p>
+
+    <h3>Open it in VS Code</h3>
+    <div class="code-block"><pre data-code="code .">code .</pre><button class="copy-btn">Copy</button></div>
+
+    <h3>Project structure</h3>
+    <table>
+      <tr><th>Path</th><th>What it is</th></tr>
+      <tr><td>node_modules/</td><td>downloaded libraries — never edit</td></tr>
+      <tr><td>public/</td><td>static files like images</td></tr>
+      <tr><td>src/App.jsx</td><td>your main app — you'll edit this most</td></tr>
+      <tr><td>src/main.jsx</td><td>entry point that starts your app</td></tr>
+      <tr><td>package.json</td><td>project settings and command shortcuts</td></tr>
+      <tr><td>vite.config.js</td><td>build configuration (edited in Step SHT-09)</td></tr>
+    </table>
+
+    <h3>Make a first edit</h3>
+    <p>Open <code class="inline">src/App.jsx</code>, select all, replace with:</p>
+    <div class="code-block"><pre data-code='function App() {
+  return (
+    &lt;div style={{ padding: "2rem", fontFamily: "sans-serif" }}&gt;
+      &lt;h1&gt;Hello, my first React app!&lt;/h1&gt;
+      &lt;p&gt;Edit this file and save to see live updates.&lt;/p&gt;
+    &lt;/div&gt;
+  );
+}
+
+export default App;'>function App() {
+  return (
+    &lt;div style={{ padding: "2rem", fontFamily: "sans-serif" }}&gt;
+      &lt;h1&gt;Hello, my first React app!&lt;/h1&gt;
+      &lt;p&gt;Edit this file and save to see live updates.&lt;/p&gt;
+    &lt;/div&gt;
+  );
+}
+
+export default App;</pre><button class="copy-btn">Copy</button></div>
+    <p>Save the file — your browser tab should update automatically. This is Hot Module Replacement.</p>
+  `,
+  checklist: [
+    "npm run dev works and shows the starter page",
+    "I can see and edit the project in VS Code",
+    "My edit to App.jsx showed up live in the browser"
+  ]
+},
+{
+  tag: "SHT-08",
+  title: "Build the data app",
+  eyebrow: "Build · the actual app",
+  body: `
+    <p>Replace the contents of <code class="inline">src/App.jsx</code> again with:</p>
+    <div class="code-block"><pre data-code='import { useEffect, useState } from "react";
+
+function App() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() =&gt; {
+    fetch("https://jsonplaceholder.typicode.com/users")
+      .then((res) =&gt; res.json())
+      .then((data) =&gt; {
+        setUsers(data);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) return &lt;p&gt;Loading...&lt;/p&gt;;
+
+  return (
+    &lt;div style={{ padding: "2rem", fontFamily: "sans-serif" }}&gt;
+      &lt;h1&gt;User Directory&lt;/h1&gt;
+      &lt;ul&gt;
+        {users.map((user) =&gt; (
+          &lt;li key={user.id}&gt;
+            &lt;strong&gt;{user.name}&lt;/strong&gt; — {user.email}
+          &lt;/li&gt;
+        ))}
+      &lt;/ul&gt;
+    &lt;/div&gt;
+  );
+}
+
+export default App;'>import { useEffect, useState } from "react";
+
+function App() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() =&gt; {
+    fetch("https://jsonplaceholder.typicode.com/users")
+      .then((res) =&gt; res.json())
+      .then((data) =&gt; {
+        setUsers(data);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) return &lt;p&gt;Loading...&lt;/p&gt;;
+
+  return (
+    &lt;div style={{ padding: "2rem", fontFamily: "sans-serif" }}&gt;
+      &lt;h1&gt;User Directory&lt;/h1&gt;
+      &lt;ul&gt;
+        {users.map((user) =&gt; (
+          &lt;li key={user.id}&gt;
+            &lt;strong&gt;{user.name}&lt;/strong&gt; — {user.email}
+          &lt;/li&gt;
+        ))}
+      &lt;/ul&gt;
+    &lt;/div&gt;
+  );
+}
+
+export default App;</pre><button class="copy-btn">Copy</button></div>
+    <h3>What this code does, in plain English</h3>
+    <ul>
+      <li><code class="inline">useState([])</code> creates a variable <code class="inline">users</code> starting empty, plus <code class="inline">setUsers</code> to update it.</li>
+      <li><code class="inline">useEffect(...)</code> runs once on load. <code class="inline">fetch(...)</code> requests data from a public test API returning fake users.</li>
+      <li>Once data arrives, <code class="inline">setUsers(data)</code> stores it and <code class="inline">setLoading(false)</code> marks loading as finished.</li>
+      <li>The <code class="inline">return (...)</code> shows "Loading..." until ready, then lists each user's name and email.</li>
+    </ul>
+    <div class="callout note"><strong>Using your own data?</strong> Swap the URL inside <code class="inline">fetch(...)</code> for any public JSON API, and adjust <code class="inline">user.name</code> / <code class="inline">user.email</code> to match its field names.</div>
+  `,
+  checklist: ["The app fetches and displays a list of users in the browser"]
+},
+{
+  tag: "SHT-09",
+  title: "Push the project to GitHub",
+  eyebrow: "Ship it · version control",
+  body: `
+    <h3>Create an empty repository</h3>
+    <ol>
+      <li>Go to <code class="inline">https://github.com/new</code></li>
+      <li>Enter a name, e.g. <code class="inline">my-data-app</code></li>
+      <li>Leave it Public</li>
+      <li><strong>Do not</strong> check "Add a README" or any initialization option</li>
+      <li>Click <strong>Create repository</strong></li>
+    </ol>
+    <h3>Connect and push</h3>
+    <div class="code-block"><pre data-code="git init">git init</pre><button class="copy-btn">Copy</button></div>
+    <p>Starts tracking this folder with Git.</p>
+    <div class="code-block"><pre data-code="git add .">git add .</pre><button class="copy-btn">Copy</button></div>
+    <p>Stages all files to be saved.</p>
+    <div class="code-block"><pre data-code='git commit -m "Initial commit"'>git commit -m "Initial commit"</pre><button class="copy-btn">Copy</button></div>
+    <p>Saves a snapshot with a message.</p>
+    <div class="code-block"><pre data-code="git branch -M main">git branch -M main</pre><button class="copy-btn">Copy</button></div>
+    <p>Names the primary branch "main."</p>
+    <div class="code-block"><pre data-code="git remote add origin https://github.com/YOUR-USERNAME/my-data-app.git">git remote add origin https://github.com/YOUR-USERNAME/my-data-app.git</pre><button class="copy-btn">Copy</button></div>
+    <p>Replace <code class="inline">YOUR-USERNAME</code> with your actual GitHub username.</p>
+    <div class="code-block"><pre data-code="git push -u origin main">git push -u origin main</pre><button class="copy-btn">Copy</button></div>
+    <p>Uploads your code. If prompted, log in via the browser window that opens.</p>
+    <p>Refresh your repo page on GitHub — your files should now be listed there.</p>
+  `,
+  checklist: ["My repository exists on GitHub", "git push succeeded and files show up on GitHub"]
+},
+{
+  tag: "SHT-10",
+  title: "Deploy to GitHub Pages",
+  eyebrow: "Ship it · going live",
+  body: `
+    <h3>Install the gh-pages tool</h3>
+    <div class="code-block"><pre data-code="npm install gh-pages --save-dev">npm install gh-pages --save-dev</pre><button class="copy-btn">Copy</button></div>
+
+    <h3>Tell Vite where the app will live</h3>
+    <p>GitHub Pages serves your project at <code class="inline">https://YOUR-USERNAME.github.io/my-data-app/</code>. Open <code class="inline">vite.config.js</code> and replace its contents:</p>
+    <div class="code-block"><pre data-code='import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  base: "/my-data-app/", // must exactly match your repo name
+});'>import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  base: "/my-data-app/", // must exactly match your repo name
+});</pre><button class="copy-btn">Copy</button></div>
+
+    <h3>Add deploy shortcuts</h3>
+    <p>In <code class="inline">package.json</code>, update the <code class="inline">"scripts"</code> section:</p>
+    <div class="code-block"><pre data-code='"scripts": {
+  "dev": "vite",
+  "build": "vite build",
+  "preview": "vite preview",
+  "predeploy": "npm run build",
+  "deploy": "gh-pages -d dist"
+},'>"scripts": {
+  "dev": "vite",
+  "build": "vite build",
+  "preview": "vite preview",
+  "predeploy": "npm run build",
+  "deploy": "gh-pages -d dist"
+},</pre><button class="copy-btn">Copy</button></div>
+
+    <h3>Deploy</h3>
+    <div class="code-block"><pre data-code="npm run deploy">npm run deploy</pre><button class="copy-btn">Copy</button></div>
+    <p>Builds the app into a <code class="inline">dist</code> folder, then uploads it to a <code class="inline">gh-pages</code> branch on GitHub.</p>
+
+    <h3>Turn on GitHub Pages</h3>
+    <ol>
+      <li>Go to your repository → <strong>Settings</strong></li>
+      <li>Click <strong>Pages</strong> in the sidebar</li>
+      <li>Under Source, choose <strong>Deploy from a branch</strong></li>
+      <li>Branch: <code class="inline">gh-pages</code>, folder <code class="inline">/ (root)</code> → Save</li>
+    </ol>
+    <p>Wait 1–2 minutes, then visit <code class="inline">https://YOUR-USERNAME.github.io/my-data-app/</code> — your app is live.</p>
+  `,
+  checklist: ["npm run deploy completed with no errors", "GitHub Pages is set to the gh-pages branch", "My app loads at the live URL"]
+},
+{
+  tag: "SHT-11",
+  title: "Future updates & troubleshooting",
+  eyebrow: "Reference",
+  body: `
+    <h3>Updating your app later</h3>
+    <div class="code-block"><pre data-code='git add .
+git commit -m "Describe what you changed"
+git push
+npm run deploy'>git add .
+git commit -m "Describe what you changed"
+git push
+npm run deploy</pre><button class="copy-btn">Copy</button></div>
+    <p><code class="inline">git push</code> updates the code record on <code class="inline">main</code>; <code class="inline">npm run deploy</code> updates the live site. Both are needed.</p>
+
+    <h3>Troubleshooting</h3>
+    <table>
+      <tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr>
+      <tr><td>node -v: command not found</td><td>Node didn't install correctly</td><td>Reinstall from nodejs.org, restart computer</td></tr>
+      <tr><td>Blank white page live</td><td>base in vite.config.js doesn't match repo name</td><td>Check spelling/slashes: /my-data-app/</td></tr>
+      <tr><td>Deploy fails with auth error</td><td>Git isn't authenticated</td><td>Run gh auth login, or follow the browser login prompt</td></tr>
+      <tr><td>Changes not showing live</td><td>Forgot to redeploy, or browser cache</td><td>Run npm run deploy again; hard-refresh (Ctrl/Cmd+Shift+R)</td></tr>
+      <tr><td>"port already in use"</td><td>A previous npm run dev is still running</td><td>Close the other terminal or press Ctrl+C in it</td></tr>
+    </table>
+  `,
+  checklist: ["I know how to push future updates"]
+}
+];
+
+let current = 0;
+const completed = new Set();
+const toc = document.getElementById('toc');
+const panel = document.getElementById('panel');
+const meterFill = document.getElementById('meterFill');
+const meterLabel = document.getElementById('meterLabel');
+
+function totalChecklistItems(){
+  return steps.reduce((sum, s) => sum + s.checklist.length, 0);
+}
+function completedChecklistItems(){
+  return completed.size;
+}
+function updateMeter(){
+  const total = totalChecklistItems();
+  const done = completedChecklistItems();
+  const pct = total ? Math.round((done/total)*100) : 0;
+  meterFill.style.width = pct + '%';
+  meterLabel.textContent = done + ' / ' + total + ' done';
+}
+
+function stepAllDone(stepIdx){
+  const s = steps[stepIdx];
+  return s.checklist.every((_, i) => completed.has(stepIdx + '-' + i));
+}
+
+function renderToc(){
+  toc.innerHTML = '';
+  steps.forEach((s, i) => {
+    const btn = document.createElement('button');
+    btn.className = i === current ? 'active' : '';
+    const check = document.createElement('span');
+    check.className = 'check' + (stepAllDone(i) ? ' done' : '');
+    check.textContent = stepAllDone(i) ? '✓' : '';
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = s.tag;
+    const label = document.createElement('span');
+    label.textContent = s.title;
+    btn.appendChild(check);
+    btn.appendChild(tag);
+    btn.appendChild(label);
+    btn.onclick = () => { current = i; render(); };
+    toc.appendChild(btn);
+  });
+}
+
+function renderPanel(){
+  const s = steps[current];
+  const allDone = stepAllDone(current);
+  panel.innerHTML = `
+    <p class="step-eyebrow">${s.eyebrow}</p>
+    <h2 class="step-title">${s.tag} — ${s.title}${allDone ? '<span class="done-badge">✓ complete</span>' : ''}</h2>
+    <div class="step-body">${s.body}</div>
+    <h3>Mark your progress</h3>
+    <div class="checklist">
+      ${s.checklist.map((item, i) => {
+        const id = current + '-' + i;
+        const checked = completed.has(id) ? 'checked' : '';
+        return `<div class="checklist-item">
+          <input type="checkbox" id="chk-${id}" data-id="${id}" ${checked}>
+          <label for="chk-${id}">${item}</label>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="nav-buttons">
+      <button id="prevBtn" ${current === 0 ? 'disabled' : ''}>&larr; Previous</button>
+      <button id="nextBtn" class="primary" ${current === steps.length - 1 ? 'disabled' : ''}>Next &rarr;</button>
+    </div>
+  `;
+
+  panel.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', (e) => {
+      const id = e.target.getAttribute('data-id');
+      if (e.target.checked) completed.add(id); else completed.delete(id);
+      updateMeter();
+      renderToc();
+      const badgeSpot = panel.querySelector('.step-title');
+      if (stepAllDone(current) && !badgeSpot.querySelector('.done-badge')) {
+        badgeSpot.innerHTML = `${s.tag} — ${s.title}<span class="done-badge">✓ complete</span>`;
+      } else if (!stepAllDone(current)) {
+        badgeSpot.innerHTML = `${s.tag} — ${s.title}`;
+      }
+    });
+  });
+
+  panel.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const codeEl = btn.previousElementSibling;
+      const text = codeEl.getAttribute('data-code') || codeEl.textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+      });
+    });
+  });
+
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  if (prevBtn) prevBtn.onclick = () => { if (current > 0) { current--; render(); window.scrollTo({top:0, behavior:'smooth'}); } };
+  if (nextBtn) nextBtn.onclick = () => { if (current < steps.length - 1) { current++; render(); window.scrollTo({top:0, behavior:'smooth'}); } };
+}
+
+function render(){
+  renderToc();
+  renderPanel();
+  updateMeter();
+}
+
+render();
+</script>
+</body>
+</html>
