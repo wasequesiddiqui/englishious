@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📘 Data Science Interactive Cheatsheet</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --card-bg: #fafaf8;
+            --text: #2e2e2e;
+            --border: #d8d5cc;
+            --accent: #b45f4b;      /* terracotta accent */
+            --accent-hover: #9e4f3e;
+            --code-bg: #ece7dc;     /* olive‑green pastel tint */
+            --shadow: 0 2px 8px rgba(0,0,0,0.05);
+            --summary-bg: #f4f0e6;  /* warm cream */
+            --th-text: #ffffff;
+            /* camel for alternating rows */
+            --row-even-bg: #d9b68a; /* camel */
+            --row-odd-bg: #ffffff;
+            --row-hover: #f2e2cf;
+        }
+        body.dark {
+            --bg: #1e1e2f;
+            --card-bg: #2a2a3c;
+            --text: #e0d7c6;
+            --border: #4a4940;
+            --accent: #d48c6b;
+            --accent-hover: #c07a5a;
+            --code-bg: #3a382c;       /* dark olive tint */
+            --shadow: 0 2px 10px rgba(0,0,0,0.4);
+            --summary-bg: #332f2a;
+            --th-text: #ffffff;
+            --row-even-bg: #4a3f32;   /* dark camel */
+            --row-odd-bg: #2a2a3c;
+            --row-hover: #554b3e;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            transition: background 0.3s, color 0.3s;
+            padding: 1.5rem;
+            max-width: 1300px;
+            margin: 0 auto;
+            line-height: 1.5;
+        }
+        header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            gap: 1rem;
+        }
+        h1 {
+            font-size: 1.9rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            flex-wrap: wrap;
+        }
+        #searchInput {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 2rem;
+            background: var(--card-bg);
+            color: var(--text);
+            width: 220px;
+            transition: 0.2s;
+            font-size: 0.9rem;
+        }
+        #searchInput:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(180,95,75,0.2);
+        }
+        .btn {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            transition: all 0.2s;
+            white-space: nowrap;
+            text-decoration: none;
+        }
+        .btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .tab-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.3rem;
+        }
+        .tab-btn {
+            background: transparent;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            color: var(--text);
+            border-radius: 0.4rem 0.4rem 0 0;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover {
+            background: var(--summary-bg);
+        }
+        .tab-btn.active {
+            color: var(--accent);
+            font-weight: 600;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-bottom: 2px solid var(--bg);
+            margin-bottom: -2px;
+        }
+        body.dark .tab-btn.active {
+            border-bottom-color: var(--bg);
+        }
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.25s ease;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .section {
+            margin-bottom: 1.2rem;
+            border: 1px solid var(--border);
+            border-radius: 0.8rem;
+            background: var(--card-bg);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+        .section summary {
+            padding: 0.9rem 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: var(--summary-bg);
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .section summary::-webkit-details-marker {
+            display: none;
+        }
+        .section summary::after {
+            content: '▸';
+            font-size: 1.2rem;
+            transition: transform 0.2s;
+            margin-left: 0.5rem;
+        }
+        .section[open] summary::after {
+            transform: rotate(90deg);
+        }
+        .section .content {
+            padding: 0.8rem 1.2rem 1.2rem;
+        }
+
+        /* ── Pastel Earthy Tables ── */
+        .function-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        }
+        .function-table th {
+            font-weight: 600;
+            padding: 0.6rem 0.7rem;
+            text-align: left;
+            border: 1px solid var(--border);
+            transition: background 0.2s;
+            color: var(--th-text);
+        }
+        .function-table td {
+            padding: 0.5rem 0.7rem;
+            border: 1px solid var(--border);
+            vertical-align: top;
+            transition: background 0.15s;
+        }
+        /* alternating row camel theme */
+        .function-table tbody tr:nth-child(odd) td {
+            background: var(--row-odd-bg);
+        }
+        .function-table tbody tr:nth-child(even) td {
+            background: var(--row-even-bg);
+        }
+        .function-table tbody tr:hover td {
+            background: var(--row-hover);
+            cursor: default;
+        }
+        .function-table code {
+            background: var(--code-bg);
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.3rem;
+            font-size: 0.82rem;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+        .desc-text {
+            color: var(--text);
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+        .no-results {
+            text-align: center;
+            padding: 2rem;
+            opacity: 0.6;
+        }
+
+        /* Per‑tab header colors (light & dark) */
+        #tabContentContainer[data-tab="pandas"] .function-table th {
+            background: #e27a5f; /* Terracotta */
+        }
+        body.dark #tabContentContainer[data-tab="pandas"] .function-table th {
+            background: #b25b4b;
+        }
+        #tabContentContainer[data-tab="numpy"] .function-table th {
+            background: #f4a261; /* Burnt Orange */
+        }
+        body.dark #tabContentContainer[data-tab="numpy"] .function-table th {
+            background: #cc8533;
+        }
+        #tabContentContainer[data-tab="matplotlib"] .function-table th {
+            background: #f2c94c; /* Mustard Yellow */
+            color: #2e2e2e;       /* dark text for contrast */
+        }
+        body.dark #tabContentContainer[data-tab="matplotlib"] .function-table th {
+            background: #d4ac0d;
+            color: #ffffff;
+        }
+        #tabContentContainer[data-tab="plotly"] .function-table th {
+            background: #9caf88; /* Sage Green */
+        }
+        body.dark #tabContentContainer[data-tab="plotly"] .function-table th {
+            background: #7a8b5f;
+        }
+        #tabContentContainer[data-tab="sklearn"] .function-table th {
+            background: #4f9da6; /* Deep Teal */
+        }
+        body.dark #tabContentContainer[data-tab="sklearn"] .function-table th {
+            background: #3b7b7b;
+        }
+
+        /* ── Export container (hidden except when printing) ── */
+        #exportContainer {
+            display: none;
+            background: white;
+            color: black;
+            padding: 0.5cm;
+            font-family: system-ui, sans-serif;
+        }
+        /* Export tab-specific table header colors */
+        .export-tab.tab-pandas .function-table th {
+            background: #e27a5f !important;
+            color: #fff !important;
+        }
+        .export-tab.tab-numpy .function-table th {
+            background: #f4a261 !important;
+            color: #fff !important;
+        }
+        .export-tab.tab-matplotlib .function-table th {
+            background: #f2c94c !important;
+            color: #2e2e2e !important;
+        }
+        .export-tab.tab-plotly .function-table th {
+            background: #9caf88 !important;
+            color: #fff !important;
+        }
+        .export-tab.tab-sklearn .function-table th {
+            background: #4f9da6 !important;
+            color: #fff !important;
+        }
+        /* Export alternating rows camel (print) */
+        #exportContainer .function-table tbody tr:nth-child(even) td {
+            background: #d9b68a !important;
+        }
+        #exportContainer .function-table tbody tr:nth-child(odd) td {
+            background: #ffffff !important;
+        }
+        @media print {
+            body {
+                background: white !important;
+                color: black !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            body > *:not(#exportContainer) {
+                display: none !important;
+            }
+            #exportContainer {
+                display: block !important;
+                position: static;
+                margin: 0;
+                padding: 0.5cm;
+            }
+            #exportContainer .section {
+                break-inside: avoid;
+                box-shadow: none;
+                border: 1px solid #ccc;
+                background: white;
+                margin-bottom: 0.8rem;
+            }
+            #exportContainer .section summary {
+                background: #f0f0f0;
+                color: black;
+            }
+            #exportContainer .tab-title {
+                font-size: 1.4rem;
+                font-weight: bold;
+                margin-top: 1rem;
+                margin-bottom: 0.6rem;
+                border-bottom: 2px solid #333;
+                padding-bottom: 0.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>📊 Data Science Cheatsheet</h1>
+        <div class="controls">
+            <input type="text" id="searchInput" placeholder="Search functions..." autocomplete="off">
+            <button id="themeToggle" class="btn">🌙 Dark</button>
+            <button id="exportPdfBtn" class="btn">📄 Export / Print PDF</button>
+        </div>
+    </header>
+
+    <div class="tab-nav" id="tabNav">
+        <button class="tab-btn active" data-tab="pandas">🐼 Pandas</button>
+        <button class="tab-btn" data-tab="numpy">🔢 NumPy</button>
+        <button class="tab-btn" data-tab="matplotlib">📈 Matplotlib</button>
+        <button class="tab-btn" data-tab="plotly">📉 Plotly</button>
+        <button class="tab-btn" data-tab="sklearn">🤖 Scikit‑learn</button>
+    </div>
+
+    <div id="tabContentContainer"></div>
+    <div id="exportContainer"></div>
+
+    <script>
+        (function() {
+            const cheatsheetData = {
+                pandas: {
+                    title: "Pandas for Data Analysis",
+                    sections: [
+                        {
+                            title: "Creating DataFrames & Series",
+                            items: [
+                                { syntax: "pd.DataFrame(data, columns, index)", desc: "Creates a 2‑D tabular data structure.", use: "When you have raw data (lists, dicts) and need a table." },
+                                { syntax: "pd.Series(data, index, name)", desc: "1‑D labeled array.", use: "For a single column or sequence." },
+                                { syntax: "pd.read_csv('file.csv')", desc: "Reads a CSV into a DataFrame.", use: "Primary way to import structured data." },
+                                { syntax: "pd.read_excel('file.xlsx')", desc: "Reads Excel file.", use: "When data comes in Excel format." }
+                            ]
+                        },
+                        {
+                            title: "Viewing & Inspecting Data",
+                            items: [
+                                { syntax: "df.head(n)", desc: "First n rows.", use: "Quick peek at top of dataset." },
+                                { syntax: "df.tail(n)", desc: "Last n rows.", use: "Check end of data." },
+                                { syntax: "df.shape", desc: "(rows, columns).", use: "Get dimensions." },
+                                { syntax: "df.columns", desc: "Column labels.", use: "Verify imported columns." },
+                                { syntax: "df.index", desc: "Row labels.", use: "Check index after loading." },
+                                { syntax: "df.dtypes", desc: "Data types of columns.", use: "Identify numeric vs. string columns." },
+                                { syntax: "df.info()", desc: "Summary with memory usage.", use: "Full overview including nulls." },
+                                { syntax: "df.describe()", desc: "Descriptive statistics.", use: "Summarize numeric columns." },
+                                { syntax: "df.value_counts()", desc: "Counts unique values.", use: "Categorical distribution." },
+                                { syntax: "df.nunique()", desc: "Number of distinct values.", use: "Cardinality of columns." }
+                            ]
+                        },
+                        {
+                            title: "Selecting & Filtering",
+                            items: [
+                                { syntax: "df['col']", desc: "Single column as Series.", use: "Extract one column." },
+                                { syntax: "df[['col1','col2']]", desc: "Multiple columns.", use: "Keep subset of columns." },
+                                { syntax: "df.loc[row, col]", desc: "Label‑based indexing.", use: "Select by index label." },
+                                { syntax: "df.iloc[row, col]", desc: "Position‑based indexing.", use: "Select by integer location." },
+                                { syntax: "df[df['col'] > 5]", desc: "Boolean filtering.", use: "Rows meeting condition." },
+                                { syntax: "df.query('col > 5')", desc: "SQL‑like filter string.", use: "Complex readable filters." }
+                            ]
+                        },
+                        {
+                            title: "Sorting & Ranking",
+                            items: [
+                                { syntax: "df.sort_values('col', ascending=False)", desc: "Sort by column values.", use: "Arrange data for ranking." },
+                                { syntax: "df.sort_index()", desc: "Sort by index.", use: "Order after merging." },
+                                { syntax: "df['col'].rank()", desc: "Rank values, handles ties.", use: "Create ranking column." }
+                            ]
+                        },
+                        {
+                            title: "Grouping & Aggregation",
+                            items: [
+                                { syntax: "df.groupby('col').mean()", desc: "Group and compute mean.", use: "Average by category." },
+                                { syntax: "df.groupby([...]).agg({'col':'sum'})", desc: "Multiple aggregations.", use: "Different stats per group." },
+                                { syntax: "df.pivot_table(values, index, columns, aggfunc)", desc: "Spreadsheet‑style pivot.", use: "Reshape and summarise." }
+                            ]
+                        },
+                        {
+                            title: "Merging, Joining & Concatenating",
+                            items: [
+                                { syntax: "pd.merge(left, right, on='key')", desc: "SQL‑like join.", use: "Combine tables on key." },
+                                { syntax: "left.merge(right, left_on, right_on)", desc: "Merge with different key names.", use: "When keys differ." },
+                                { syntax: "pd.concat([df1, df2], axis=0)", desc: "Stack rows.", use: "Append new data." },
+                                { syntax: "pd.concat([df1, df2], axis=1)", desc: "Stack columns.", use: "Add columns horizontally." }
+                            ]
+                        },
+                        {
+                            title: "Handling Missing Data",
+                            items: [
+                                { syntax: "df.dropna()", desc: "Remove rows with any missing.", use: "Discard incomplete records." },
+                                { syntax: "df.fillna(0)", desc: "Replace missing with scalar.", use: "Impute with constant." },
+                                { syntax: "df['col'].fillna(df['col'].mean())", desc: "Fill with column mean.", use: "Mean imputation." },
+                                { syntax: "df.isna().sum()", desc: "Count missing per column.", use: "Identify missing data." }
+                            ]
+                        },
+                        {
+                            title: "Apply, Map & Transform",
+                            items: [
+                                { syntax: "df['col'].apply(func)", desc: "Element‑wise function.", use: "Custom transformation." },
+                                { syntax: "df.applymap(func)", desc: "Function to every cell.", use: "DataFrame‑wide operation." },
+                                { syntax: "df['col'].map(dict)", desc: "Replace values via dict.", use: "Recode categories." },
+                                { syntax: "df.transform(func)", desc: "Per‑column transform, returns same shape.", use: "After groupby to broadcast aggregates." }
+                            ]
+                        },
+                        {
+                            title: "Datetime & Strings",
+                            items: [
+                                { syntax: "pd.to_datetime(df['date'])", desc: "Convert to datetime.", use: "Enable time operations." },
+                                { syntax: "df['date'].dt.year", desc: "Extract year/month/day.", use: "Feature engineering." },
+                                { syntax: "df['str'].str.upper()", desc: "Vectorized string ops.", use: "Clean/filter text." }
+                            ]
+                        }
+                    ]
+                },
+                numpy: {
+                    title: "NumPy for Data Analysis",
+                    sections: [
+                        {
+                            title: "Creating Arrays",
+                            items: [
+                                { syntax: "np.array([1,2,3])", desc: "Create array from list.", use: "Convert Python lists." },
+                                { syntax: "np.zeros((3,4)), np.ones((2,3))", desc: "Arrays of 0s or 1s.", use: "Placeholders." },
+                                { syntax: "np.arange(start, stop, step)", desc: "Evenly spaced integers.", use: "Ranges like Python range." },
+                                { syntax: "np.linspace(start, stop, num)", desc: "Evenly spaced floats.", use: "Specific number of points." },
+                                { syntax: "np.random.rand(d0,d1)", desc: "Uniform [0,1) random.", use: "Random data generation." },
+                                { syntax: "np.random.randn(d0,d1)", desc: "Standard normal random.", use: "Noise/weight initialisation." },
+                                { syntax: "np.random.randint(low, high, size)", desc: "Random integers.", use: "Discrete random data." }
+                            ]
+                        },
+                        {
+                            title: "Array Attributes",
+                            items: [
+                                { syntax: "arr.shape", desc: "Dimensions tuple.", use: "Check array size." },
+                                { syntax: "arr.ndim", desc: "Number of axes.", use: "1D, 2D, etc." },
+                                { syntax: "arr.size", desc: "Total elements.", use: "Get element count." },
+                                { syntax: "arr.dtype", desc: "Element data type.", use: "Verify precision." }
+                            ]
+                        },
+                        {
+                            title: "Indexing, Slicing & Filtering",
+                            items: [
+                                { syntax: "arr[0,1]", desc: "Single element.", use: "Access value." },
+                                { syntax: "arr[:, 1:3]", desc: "Slice rows/cols.", use: "Sub‑matrix." },
+                                { syntax: "arr[arr > 5]", desc: "Boolean indexing.", use: "Filter by condition." },
+                                { syntax: "arr[[0,2,4]]", desc: "Fancy indexing (list).", use: "Pick specific rows." }
+                            ]
+                        },
+                        {
+                            title: "Reshaping & Stacking",
+                            items: [
+                                { syntax: "arr.reshape(new_shape)", desc: "Change shape.", use: "Prepare for models." },
+                                { syntax: "arr.ravel() / arr.flatten()", desc: "Flatten to 1D.", use: "Collapse dimensions." },
+                                { syntax: "np.transpose(arr) / arr.T", desc: "Transpose.", use: "Swap axes." },
+                                { syntax: "np.concatenate([a,b], axis=0)", desc: "Join along axis.", use: "Combine arrays." },
+                                { syntax: "np.vstack([a,b]), np.hstack([a,b])", desc: "Stack vertically/horizontally.", use: "Quick concatenation." }
+                            ]
+                        },
+                        {
+                            title: "Universal Functions (ufuncs)",
+                            items: [
+                                { syntax: "np.add, np.subtract, np.multiply, np.divide", desc: "Element‑wise arithmetic.", use: "Vectorized math." },
+                                { syntax: "np.sqrt, np.exp, np.log", desc: "Math functions.", use: "Transform data." },
+                                { syntax: "np.where(cond, x, y)", desc: "Conditional selection.", use: "Replace values based on condition." }
+                            ]
+                        },
+                        {
+                            title: "Statistics & Aggregations",
+                            items: [
+                                { syntax: "np.sum, np.mean, np.std, np.var, np.min, np.max", desc: "Basic stats.", use: "Summarise data." },
+                                { syntax: "np.argmin, np.argmax", desc: "Index of min/max.", use: "Find position of extremum." },
+                                { syntax: "np.median, np.percentile", desc: "Median/percentile.", use: "Robust measures." },
+                                { syntax: "arr.sum(axis=0)", desc: "Sum along axis.", use: "Row/column aggregation." }
+                            ]
+                        },
+                        {
+                            title: "Linear Algebra",
+                            items: [
+                                { syntax: "np.dot(a, b) / a @ b", desc: "Dot product (matrix multiply).", use: "Matrix operations." },
+                                { syntax: "np.linalg.inv(mat)", desc: "Matrix inverse.", use: "Solving linear systems." },
+                                { syntax: "np.linalg.eig(mat)", desc: "Eigenvalues/vectors.", use: "PCA, spectral analysis." },
+                                { syntax: "np.linalg.svd(mat)", desc: "Singular value decomposition.", use: "Dimensionality reduction." }
+                            ]
+                        }
+                    ]
+                },
+                matplotlib: {
+                    title: "Matplotlib for Data Analysis",
+                    sections: [
+                        {
+                            title: "Setup & Figure",
+                            items: [
+                                { syntax: "fig, ax = plt.subplots(nrows, ncols, figsize)", desc: "Create figure & axes.", use: "Start plotting canvas." },
+                                { syntax: "plt.figure(figsize=(8,5))", desc: "New figure with size.", use: "Open new window." }
+                            ]
+                        },
+                        {
+                            title: "Plot Types",
+                            items: [
+                                { syntax: "ax.plot(x, y, 'o-')", desc: "Line/marker plot.", use: "Trends, time series." },
+                                { syntax: "ax.scatter(x, y, c=z, s=size)", desc: "Scatter plot.", use: "Relationship between variables." },
+                                { syntax: "ax.bar(x, height), ax.barh(y, width)", desc: "Bar chart.", use: "Categorical comparison." },
+                                { syntax: "ax.hist(data, bins=30)", desc: "Histogram.", use: "Distribution of variable." },
+                                { syntax: "ax.boxplot(data)", desc: "Box plot.", use: "Outlier & group comparison." },
+                                { syntax: "ax.pie(sizes, labels, autopct)", desc: "Pie chart.", use: "Proportions (use sparingly)." }
+                            ]
+                        },
+                        {
+                            title: "Customization",
+                            items: [
+                                { syntax: "ax.set_xlabel('X'), ax.set_ylabel('Y'), ax.set_title('Title')", desc: "Labels & title.", use: "Make plot readable." },
+                                { syntax: "ax.legend()", desc: "Legend.", use: "Identify data series." },
+                                { syntax: "ax.grid(True)", desc: "Grid lines.", use: "Improve readability." },
+                                { syntax: "ax.set_xlim/ylim", desc: "Axis limits.", use: "Zoom into region." },
+                                { syntax: "plt.style.use('ggplot')", desc: "Apply style.", use: "Quick theme change." }
+                            ]
+                        },
+                        {
+                            title: "Saving & Display",
+                            items: [
+                                { syntax: "fig.savefig('plot.png', dpi=300)", desc: "Save to file.", use: "Export high‑quality image." },
+                                { syntax: "plt.tight_layout()", desc: "Adjust subplot spacing.", use: "Prevent overlap." },
+                                { syntax: "plt.show()", desc: "Display plot.", use: "View in notebook/script." }
+                            ]
+                        }
+                    ]
+                },
+                plotly: {
+                    title: "Plotly for Data Analysis",
+                    sections: [
+                        {
+                            title: "Plotly Express (quick)",
+                            items: [
+                                { syntax: "px.scatter(df, x, y, color, size)", desc: "Interactive scatter.", use: "Explore relationships with hover." },
+                                { syntax: "px.line(df, x, y)", desc: "Interactive line.", use: "Time series." },
+                                { syntax: "px.bar(df, x, y, color)", desc: "Bar chart.", use: "Categorical breakdown." },
+                                { syntax: "px.histogram(df, x, nbins)", desc: "Histogram.", use: "Distribution analysis." },
+                                { syntax: "px.box(df, x, y)", desc: "Box plot.", use: "Group comparisons." },
+                                { syntax: "px.imshow(corr_matrix, text_auto=True)", desc: "Heatmap.", use: "Correlation matrix." }
+                            ]
+                        },
+                        {
+                            title: "Graph Objects (custom)",
+                            items: [
+                                { syntax: "go.Figure(data=go.Scatter(x, y))", desc: "Figure with trace.", use: "Full customisation." },
+                                { syntax: "fig.add_trace(go.Bar(x, y))", desc: "Add additional trace.", use: "Overlay charts." }
+                            ]
+                        },
+                        {
+                            title: "Layout & Interactivity",
+                            items: [
+                                { syntax: "fig.update_layout(title, xaxis_title, yaxis_title)", desc: "Set titles and axis.", use: "Make plot informative." },
+                                { syntax: "fig.update_traces(marker=dict(...))", desc: "Modify trace appearance.", use: "Style all traces." },
+                                { syntax: "fig.show()", desc: "Display interactive plot.", use: "Notebooks." },
+                                { syntax: "fig.write_html('plot.html')", desc: "Save as HTML.", use: "Share interactive chart." }
+                            ]
+                        }
+                    ]
+                },
+                sklearn: {
+                    title: "Scikit‑learn for Machine Learning",
+                    sections: [
+                        {
+                            title: "Preprocessing",
+                            items: [
+                                { syntax: "StandardScaler()", desc: "Standardise features (mean=0, std=1).", use: "Before distance‑based models." },
+                                { syntax: "MinMaxScaler()", desc: "Scale to a range (e.g., 0‑1).", use: "Neural networks, bounded inputs." },
+                                { syntax: "LabelEncoder()", desc: "Encode target labels.", use: "Convert string targets to integers." },
+                                { syntax: "OneHotEncoder()", desc: "Create binary dummy columns.", use: "Nominal categorical features." },
+                                { syntax: "scaler.fit_transform(X)", desc: "Fit to data then transform.", use: "Apply scaling on training data." }
+                            ]
+                        },
+                        {
+                            title: "Model Selection & Validation",
+                            items: [
+                                { syntax: "train_test_split(X, y, test_size=0.2)", desc: "Split into train/test.", use: "Hold‑out set for evaluation." },
+                                { syntax: "cross_val_score(model, X, y, cv=5)", desc: "K‑fold cross‑validation.", use: "Robust performance estimate." },
+                                { syntax: "GridSearchCV(estimator, param_grid, cv=5)", desc: "Hyperparameter tuning.", use: "Find best parameters." }
+                            ]
+                        },
+                        {
+                            title: "Supervised Models",
+                            items: [
+                                { syntax: "LinearRegression()", desc: "Ordinary least squares.", use: "Linear regression tasks." },
+                                { syntax: "LogisticRegression()", desc: "Logistic regression classifier.", use: "Binary/multiclass classification." },
+                                { syntax: "DecisionTreeClassifier()", desc: "Decision tree.", use: "Interpretable non‑linear model." },
+                                { syntax: "RandomForestClassifier()", desc: "Ensemble of trees.", use: "Robust, less overfitting." },
+                                { syntax: "SVC()", desc: "Support vector classifier.", use: "Complex margin‑based separation." },
+                                { syntax: "KNeighborsClassifier()", desc: "k‑NN classifier.", use: "Simple baseline." },
+                                { syntax: "model.fit(X_train, y_train)", desc: "Train the model.", use: "Learn from data." },
+                                { syntax: "model.predict(X_test)", desc: "Generate predictions.", use: "Evaluate or deploy." }
+                            ]
+                        },
+                        {
+                            title: "Unsupervised Models",
+                            items: [
+                                { syntax: "KMeans(n_clusters=3)", desc: "K‑means clustering.", use: "Customer segmentation." },
+                                { syntax: "kmeans.fit_predict(X)", desc: "Cluster and return labels.", use: "Get cluster assignments." },
+                                { syntax: "PCA(n_components=2)", desc: "Principal component analysis.", use: "Dimensionality reduction." },
+                                { syntax: "pca.fit_transform(X)", desc: "Fit PCA and transform.", use: "Reduce to 2D for plotting." }
+                            ]
+                        },
+                        {
+                            title: "Metrics & Evaluation",
+                            items: [
+                                { syntax: "accuracy_score(y_true, y_pred)", desc: "Fraction correct.", use: "Basic classification metric." },
+                                { syntax: "classification_report(y_true, y_pred)", desc: "Precision, recall, f1 per class.", use: "Detailed class‑wise report." },
+                                { syntax: "confusion_matrix(y_true, y_pred)", desc: "Confusion matrix.", use: "Error analysis." },
+                                { syntax: "r2_score(y_true, y_pred)", desc: "R² coefficient.", use: "Regression fit quality." },
+                                { syntax: "mean_squared_error(y_true, y_pred)", desc: "MSE.", use: "Regression error (penalises large errors)." }
+                            ]
+                        },
+                        {
+                            title: "Pipelines",
+                            items: [
+                                { syntax: "make_pipeline(StandardScaler(), LogisticRegression())", desc: "Chain preprocessing & model.", use: "Avoid data leakage, simplify code." },
+                                { syntax: "pipe.fit(X_train, y_train)", desc: "Train entire pipeline.", use: "One‑step training." },
+                                { syntax: "pipe.score(X_test, y_test)", desc: "Evaluate pipeline.", use: "Default scoring metric." }
+                            ]
+                        }
+                    ]
+                }
+            };
+
+            const tabContainer = document.getElementById('tabContentContainer');
+            const exportContainer = document.getElementById('exportContainer');
+            const tabNav = document.getElementById('tabNav');
+            const searchInput = document.getElementById('searchInput');
+            const themeToggle = document.getElementById('themeToggle');
+            const exportBtn = document.getElementById('exportPdfBtn');
+
+            let activeTab = 'pandas';
+
+            function renderItemsTable(items) {
+                if (!items || items.length === 0) return '';
+                let html = `<table class="function-table">
+                    <thead><tr><th>Syntax</th><th>What it does</th><th>When to use</th></tr></thead><tbody>`;
+                items.forEach(item => {
+                    html += `<tr>
+                        <td><code>${escapeHtml(item.syntax)}</code></td>
+                        <td class="desc-text">${escapeHtml(item.desc)}</td>
+                        <td class="desc-text">${escapeHtml(item.use)}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                return html;
+            }
+
+            function escapeHtml(str) {
+                return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            function renderTab(tabKey, filterText = '') {
+                const data = cheatsheetData[tabKey];
+                if (!data) return;
+                const filterLower = filterText.toLowerCase();
+                let html = '';
+                let anyVisible = false;
+
+                data.sections.forEach(section => {
+                    const title = section.title;
+                    let filteredItems = section.items;
+                    if (filterLower) {
+                        filteredItems = section.items.filter(item =>
+                            item.syntax.toLowerCase().includes(filterLower) ||
+                            item.desc.toLowerCase().includes(filterLower) ||
+                            item.use.toLowerCase().includes(filterLower)
+                        );
+                    }
+                    const titleMatch = !filterLower || title.toLowerCase().includes(filterLower);
+                    if (!titleMatch && filteredItems.length === 0) return;
+
+                    anyVisible = true;
+                    const tableHtml = renderItemsTable(filteredItems);
+                    html += `
+                        <details class="section" ${filterLower ? 'open' : ''}>
+                            <summary>${escapeHtml(title)}</summary>
+                            <div class="content">${tableHtml || '<p class="desc-text">No matching items.</p>'}</div>
+                        </details>
+                    `;
+                });
+
+                if (!anyVisible) {
+                    html = `<div class="no-results">🔍 No results for "<strong>${escapeHtml(filterText)}</strong>" in ${data.title}</div>`;
+                }
+
+                tabContainer.innerHTML = html;
+                // Update data-tab attribute for CSS styling
+                tabContainer.setAttribute('data-tab', tabKey);
+            }
+
+            function switchTab(tabKey) {
+                activeTab = tabKey;
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.tab === tabKey);
+                });
+                renderTab(tabKey, searchInput.value);
+            }
+
+            function buildExportHTML() {
+                let html = '';
+                for (const [key, data] of Object.entries(cheatsheetData)) {
+                    html += `<div class="export-tab tab-${key}">`;
+                    html += `<div class="tab-title">${escapeHtml(data.title)}</div>`;
+                    data.sections.forEach(section => {
+                        html += `<details class="section" open>
+                            <summary>${escapeHtml(section.title)}</summary>
+                            <div class="content">${renderItemsTable(section.items)}</div>
+                        </details>`;
+                    });
+                    html += `</div>`;
+                }
+                return html;
+            }
+
+            exportBtn.addEventListener('click', () => {
+                exportContainer.innerHTML = buildExportHTML();
+                window.print();
+            });
+
+            searchInput.addEventListener('input', (e) => {
+                renderTab(activeTab, e.target.value);
+            });
+
+            tabNav.addEventListener('click', (e) => {
+                const btn = e.target.closest('.tab-btn');
+                if (!btn) return;
+                switchTab(btn.dataset.tab);
+            });
+
+            function updateThemeIcon() {
+                const isDark = document.body.classList.contains('dark');
+                themeToggle.innerHTML = isDark ? '☀️ Light' : '🌙 Dark';
+            }
+            themeToggle.addEventListener('click', () => {
+                document.body.classList.toggle('dark');
+                updateThemeIcon();
+                localStorage.setItem('cheatsheetTheme', document.body.classList.contains('dark') ? 'dark' : 'light');
+            });
+            if (localStorage.getItem('cheatsheetTheme') === 'dark') {
+                document.body.classList.add('dark');
+            }
+            updateThemeIcon();
+
+            // initial load
+            switchTab('pandas');
+        })();
+    </script>
+</body>
+</html>
