@@ -29,21 +29,11 @@ const SHEETS_WEB_APP_URL =
   'https://script.google.com/macros/s/AKfycbyPd6eEVcLeCeyQADgi5-LK7Ca9ZCvr0NCBQoQ0lKd-EnxLfZWWyEleD17RntCVFthH/exec'
 
 /**
- * SUBJECT_PRESETS
- * A list of suggested subjects rendered into a <datalist> element. When the
- * user types in the subject input, the browser offers these as autocomplete
- * suggestions for faster entry and consistent naming across sessions.
+ * SUBJECTS
+ * The complete, fixed list of allowed subjects. Rendered into a <select>
+ * dropdown so only these options can be chosen (no free-text entry).
  */
-const SUBJECT_PRESETS = [
-  'Math',
-  'Physics',
-  'Chemistry',
-  'Biology',
-  'English',
-  'Computer Science',
-  'Economics',
-  'Accounting',
-]
+const SUBJECTS = ['English Literature', 'English Language', 'English General']
 
 /**
  * MONTHS
@@ -877,19 +867,20 @@ export default function App() {
 
           <div className="field">
             <label htmlFor="subject">Subject</label>
-            <input
+            <select
               id="subject"
-              type="text"
-              list="subject-presets"
-              placeholder="e.g. Math"
               value={form.subject}
               onChange={e => setField('subject', e.target.value)}
-            />
-            <datalist id="subject-presets">
-              {SUBJECT_PRESETS.map(s => (
-                <option key={s} value={s} />
+            >
+              <option value="" disabled>
+                Select a subject…
+              </option>
+              {SUBJECTS.map(s => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
               ))}
-            </datalist>
+            </select>
           </div>
 
           <div className="field">

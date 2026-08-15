@@ -177,7 +177,8 @@
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -189,7 +190,8 @@
 }
 
 .field input:focus,
-.field textarea:focus {
+.field textarea:focus,
+.field select:focus {
   outline: 2px solid var(--primary);
   outline-offset: -1px;
   border-color: transparent;
