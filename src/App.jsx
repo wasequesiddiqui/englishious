@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from 'react'
 
 // Global stylesheet (layout, cards, bars, buttons, form fields, etc.).
 import './App.css'
+// App logo shown in the header (bundled by Vite from src/assets).
+import logo from './assets/Logo.png'
 
 // ---------- Module-level constants ----------
 
@@ -24,7 +26,7 @@ const STORAGE_KEY = 'tuition-hours-logger'
  * doPost(e) handler reads it and writes one row per request.
  */
 const SHEETS_WEB_APP_URL =
-  'https://script.google.com/macros/s/AKfycbyFUH3Q-pzqjZ0IKFeTnqaW4sBv3WNWumD6HjJFqPl5Jv0pBvJe48k_kJItI8w7NSdp/exec'
+  'https://script.google.com/macros/s/AKfycbyPd6eEVcLeCeyQADgi5-LK7Ca9ZCvr0NCBQoQ0lKd-EnxLfZWWyEleD17RntCVFthH/exec'
 
 /**
  * SUBJECT_PRESETS
@@ -170,10 +172,60 @@ async function postToSheets(payload) {
     body: JSON.stringify(payload),
   })
   if (!res.ok) throw new Error(`Google Sheets responded with ${res.status}`)
+  await parseSheetsResponse(res)
+}
+
+/**
+ * fetchFromSheets()
+ * GETs the full record list from the Google Sheets backend. The Apps Script's
+ * doGet(e) handler is expected to read e.parameter.action === 'list' and return
+ * { success: true, records: [...] } where each record is an object keyed by the
+ * sheet's header names (id, date, studentName, fromTime, toTime, subject,
+ * notes, minutes, …).
+ *
+ * @returns {Promise<Array>} Array of raw sheet row objects.
+ */
+async function fetchFromSheets() {
+  const res = await fetch(`${SHEETS_WEB_APP_URL}?action=list`)
+  if (!res.ok) throw new Error(`Google Sheets responded with ${res.status}`)
+  const data = await parseSheetsResponse(res)
+  if (!data || !Array.isArray(data.records))
+    throw new Error('No valid records returned — check the Apps Script doGet(list) is deployed')
+  return data.records
+}
+
+/**
+ * deleteFromSheets(id)
+ * POSTs { action: 'delete', id } to the Google Sheets backend. The Apps
+ * Script's doPost(e) is expected to find the row whose `id` column matches and
+ * delete it from the sheet.
+ *
+ * @param {string|number} id - The unique id of the record to remove.
+ * @returns {Promise<void>} Resolves on success; throws on HTTP/script error.
+ */
+async function deleteFromSheets(id) {
+  const res = await fetch(SHEETS_WEB_APP_URL, {
+    method: 'POST',
+    // text/plain avoids a CORS preflight request in the browser
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'delete', id }),
+  })
+  if (!res.ok) throw new Error(`Google Sheets responded with ${res.status}`)
+  await parseSheetsResponse(res)
+}
+
+/**
+ * parseSheetsResponse(res)
+ * Shared helper that reads the Apps Script response body, parses it as JSON
+ * (defensively — the script may return plain text or an HTML error page), and
+ * throws if the script explicitly rejected the request (success:false).
+ *
+ * @param {Response} res - A fetch() Response from the Apps Script endpoint.
+ * @returns {Promise<object|null>} Parsed JSON payload (or null if not JSON).
+ */
+async function parseSheetsResponse(res) {
   const text = await res.text()
   let data
-  // The script may respond with JSON; parse it defensively in case it returns
-  // plain text or an HTML error page instead.
   try {
     data = JSON.parse(text)
   } catch {
@@ -181,6 +233,78 @@ async function postToSheets(payload) {
   }
   // Treat an explicit rejection from the script as an error.
   if (data && data.success === false) throw new Error('Google Sheets rejected the request')
+  return data
+}
+
+/**
+ * toIsoDateStr(value)
+ * Coerces a sheet cell value into an ISO date string (YYYY-MM-DD). Google Apps
+ * Script's getValues() returns Date objects for date-formatted cells, so we
+ * normalize those (and plain strings) into the same format the app uses.
+ *
+ * @param {*} value - Cell value (Date, string, or null/undefined).
+ * @returns {string} ISO date string, or '' when the value is missing/invalid.
+ */
+function toIsoDateStr(value) {
+  if (!value) return ''
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const y = value.getFullYear()
+    const m = String(value.getMonth() + 1).padStart(2, '0')
+    const d = String(value.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+  return String(value)
+}
+
+/**
+ * normalizeSheetRecord(row)
+ * Maps a raw row object returned by Google Sheets (keyed by header names like
+ * studentName / fromTime / toTime) into the app's session shape (student /
+ * start / end), so the All Records table can render it with the same helpers
+ * used everywhere else. Falls back to computing minutes from the times if the
+ * sheet row doesn't include a minutes value.
+ *
+ * @param {object} row - Raw sheet row object.
+ * @returns {object} Normalized session-shaped object.
+ */
+function normalizeSheetRecord(row) {
+  const start = toTimeStr(row.fromTime || row.start)
+  const end = toTimeStr(row.toTime || row.end)
+  return {
+    id: String(row.id ?? ''),
+    student: row.studentName || row.student || '',
+    subject: row.subject || '',
+    date: toIsoDateStr(row.date),
+    start,
+    end,
+    notes: row.notes || '',
+    minutes: Number(row.minutes) || calcMinutes(start, end),
+    createdAt: row.timestamp || Date.now(),
+  }
+}
+
+/**
+ * toTimeStr(value)
+ * Coerces a sheet cell value into a plain "HH:MM" time string. Google Sheets
+ * stores times as Date objects that serialize to ISO datetimes (e.g.
+ * "1899-12-30T04:38:50.000Z"); this extracts just the time portion so the table
+ * shows "10:00" instead of a raw timestamp. Existing "HH:MM" strings pass
+ * through untouched.
+ *
+ * @param {*} value - Cell value (Date, ISO string, "HH:MM" string, or empty).
+ * @returns {string} "HH:MM" time string (or '' when missing/invalid).
+ */
+function toTimeStr(value) {
+  if (!value) return ''
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const h = String(value.getHours()).padStart(2, '0')
+    const m = String(value.getMinutes()).padStart(2, '0')
+    return `${h}:${m}`
+  }
+  const s = String(value)
+  // "1899-12-30T04:38:50.000Z" → "04:38" (extract HH:MM from an ISO datetime)
+  const isoMatch = s.match(/T(\d{2}:\d{2})/)
+  return isoMatch ? isoMatch[1] : s
 }
 
 /**
@@ -331,6 +455,18 @@ export default function App() {
   const [error, setError] = useState('')
   // Banner state for Google Sheets sync, e.g. { type: 'saving'|'ok'|'error', msg }.
   const [syncStatus, setSyncStatus] = useState(null)
+  // Which top-level tab is visible: 'dashboard' (default) or 'records'.
+  const [activeTab, setActiveTab] = useState('dashboard')
+  // Records fetched from Google Sheets for the "All Records" tab.
+  const [sheetRecords, setSheetRecords] = useState([])
+  // True while the sheet fetch is in flight.
+  const [recordsLoading, setRecordsLoading] = useState(false)
+  // Error message if the sheet fetch/delete fails (empty string = none).
+  const [recordsError, setRecordsError] = useState('')
+  // Id of the record currently being deleted from the sheet (spinner state).
+  const [deletingId, setDeletingId] = useState(null)
+  // Counter bumped by the Refresh button to re-trigger the fetch effect.
+  const [recordsRefresh, setRecordsRefresh] = useState(0)
 
   // ---------- Side effect: persist sessions ----------
 
@@ -339,6 +475,37 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions))
   }, [sessions])
+
+  // Fetch the record list from Google Sheets whenever the All Records tab is
+  // shown, and again whenever the user clicks Refresh (recordsRefresh bumps).
+  // A `cancelled` flag prevents a stale response from overwriting newer state
+  // if the user switches tabs before the request resolves.
+  useEffect(() => {
+    if (activeTab !== 'records') return
+    let cancelled = false
+    setRecordsLoading(true)
+    setRecordsError('')
+    fetchFromSheets()
+      .then(rows => {
+        if (!cancelled) setSheetRecords(rows.map(normalizeSheetRecord))
+      })
+      .catch(err => {
+        if (cancelled) return
+        // Browsers report CORS/missing-endpoint failures as a generic
+        // "Failed to fetch", which isn't very helpful — translate it.
+        const msg =
+          err && err.message && err.message !== 'Failed to fetch'
+            ? err.message
+            : 'Could not reach Google Sheets'
+        setRecordsError(`${msg} — confirm the Apps Script has a deployed doGet(list) that returns JSON.`)
+      })
+      .finally(() => {
+        if (!cancelled) setRecordsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, recordsRefresh])
 
   // ---------- Derived values (memoized) ----------
 
@@ -355,6 +522,14 @@ export default function App() {
       ),
     [sessions],
   )
+
+  /**
+   * `localIds`
+   * Set of session ids that exist in local storage. Used by the All Records
+   * table to only offer the Edit action for records we also have locally (so
+   * pre-filling the form always works); every fetched record gets Delete.
+   */
+  const localIds = useMemo(() => new Set(sessions.map(s => s.id)), [sessions])
 
   /**
    * `filtered`
@@ -545,6 +720,35 @@ export default function App() {
   }
 
   /**
+   * handleSheetDelete(id)
+   * Deletes a record from the Google Sheet itself. Asks for confirmation, then
+   * POSTs { action: 'delete', id } to the Apps Script. On success the row is
+   * removed from the fetched list and (if it also existed locally) from local
+   * state so the dashboard stats stay in sync. The row is disabled while the
+   * request is in flight.
+   *
+   * @param {string} id - The id of the record to delete from the sheet.
+   */
+  async function handleSheetDelete(id) {
+    if (!window.confirm('Delete this session from Google Sheets?')) return
+    setDeletingId(id)
+    setRecordsError('')
+    try {
+      await deleteFromSheets(id)
+      setSheetRecords(prev => prev.filter(s => s.id !== id))
+      setSessions(prev => prev.filter(s => s.id !== id))
+      setSyncStatus({ type: 'ok', msg: '🗑 Deleted from Google Sheets' })
+    } catch {
+      setSyncStatus({ type: 'error', msg: '⚠ Could not delete from Google Sheets' })
+      setRecordsError(
+        'Could not delete — make sure the Apps Script handles action "delete" with an id column.',
+      )
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  /**
    * cancelEdit()
    * Exits edit mode without saving: clears `editingId`, resets the form to a
    * blank one, and removes any visible error message.
@@ -594,9 +798,11 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <div className="app-title">
-          <span className="app-logo" aria-hidden="true">🧑‍🏫</span>
+          <span className="app-logo" aria-hidden="true">
+            <img src={logo} alt="" className="app-logo-img" />
+          </span>
           <div>
-            <h1>Online Tuition Hours Logger</h1>
+            <h1>Englishious Hours Logger</h1>
             <p>Log tutoring sessions and see where your teaching time goes.</p>
           </div>
         </div>
@@ -619,6 +825,30 @@ export default function App() {
         </div>
       )}
 
+      <nav className="tabs" role="tablist" aria-label="App views">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'dashboard'}
+          className={`tab${activeTab === 'dashboard' ? ' active' : ''}`}
+          onClick={() => setActiveTab('dashboard')}
+        >
+          📊 Dashboard
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'records'}
+          className={`tab${activeTab === 'records' ? ' active' : ''}`}
+          onClick={() => setActiveTab('records')}
+        >
+          📋 All Records
+          {sessions.length > 0 && <span className="tab-count">{sessions.length}</span>}
+        </button>
+      </nav>
+
+      {activeTab === 'dashboard' && (
+        <>
       <section className="stats">
         <StatCard label="Total Hours" value={formatMinutes(totals.total)} sub={`${sessions.length} sessions`} />
         <StatCard label="This Week" value={formatMinutes(totals.week)} sub="Since Monday" />
@@ -799,6 +1029,106 @@ export default function App() {
           )}
         </div>
       </section>
+        </>
+      )}
+
+      {activeTab === 'records' && (
+        <section className="records">
+          <div className="card records-card">
+            <div className="list-head">
+              <h2>All Records</h2>
+              <div className="records-tools">
+                <span className="records-count">
+                  {sheetRecords.length} session{sheetRecords.length === 1 ? '' : 's'} from Google
+                  Sheets
+                </span>
+                <button
+                  className="btn btn-outline btn-sm"
+                  type="button"
+                  onClick={() => setRecordsRefresh(n => n + 1)}
+                  disabled={recordsLoading}
+                >
+                  🔄 Refresh
+                </button>
+              </div>
+            </div>
+
+            {recordsError && (
+              <p className="records-error" role="alert">
+                ⚠ {recordsError}
+              </p>
+            )}
+
+            {recordsLoading && sheetRecords.length === 0 ? (
+              <div className="empty">
+                <span className="empty-icon" aria-hidden="true">⏳</span>
+                <p>Loading records from Google Sheets…</p>
+              </div>
+            ) : sheetRecords.length === 0 ? (
+              <div className="empty">
+                <span className="empty-icon" aria-hidden="true">📭</span>
+                <p>No records found in Google Sheets yet.</p>
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table className="records-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Student</th>
+                      <th>Subject</th>
+                      <th>Time</th>
+                      <th>Duration</th>
+                      <th>Notes</th>
+                      <th className="th-actions">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sheetRecords.map(s => (
+                      <tr key={s.id} className={deletingId === s.id ? 'row-deleting' : ''}>
+                        <td className="td-date">{s.date ? formatDate(s.date) : '—'}</td>
+                        <td className="td-student">{s.student || '—'}</td>
+                        <td>{s.subject ? <span className="chip">{s.subject}</span> : '—'}</td>
+                        <td className="td-time">
+                          {s.start && s.end ? `${s.start}–${s.end}` : '—'}
+                        </td>
+                        <td className="td-hours">{formatMinutes(s.minutes || 0)}</td>
+                        <td className="td-notes" title={s.notes || ''}>
+                          {s.notes || '—'}
+                        </td>
+                        <td className="td-actions">
+                          {localIds.has(s.id) && (
+                            <button
+                              className="icon-btn"
+                              type="button"
+                              title="Edit (local copy)"
+                              onClick={() => {
+                                handleEdit(s)
+                                setActiveTab('dashboard')
+                              }}
+                            >
+                              ✏️
+                            </button>
+                          )}
+                          <button
+                            className="icon-btn danger"
+                            type="button"
+                            title="Delete from Google Sheets"
+                            disabled={deletingId !== null}
+                            onClick={() => handleSheetDelete(s.id)}
+                          >
+                            🗑️
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <footer className="app-footer">
         <p>Data is saved locally in your browser. 🛡️</p>
