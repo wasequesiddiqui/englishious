@@ -44,6 +44,9 @@ var HEADERS = [
  * ------------------------------------------------------------------------- */
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || 'list';
+  // ?action=students → return the list of names from the "Students" tab so the
+  // app can render the Student field as a strict dropdown.
+  if (action === 'students') return listStudents_();
   if (action !== 'list') return json_({ success: false, error: 'Unknown action' });
 
   var sheet = getSheet_();
@@ -125,6 +128,46 @@ function getSheet_() {
   }
   ensureHeaders_(sheet);
   return sheet;
+}
+
+/**
+ * listStudents_()
+ * Reads the "Students" tab of the spreadsheet, locates the "Student Names"
+ * column by its header, and returns every non-empty value as a de-duplicated
+ * list (order preserved). Backs doGet ?action=students so the app can render
+ * the Student field as a strict dropdown instead of a free-text box.
+ *
+ * @returns {GoogleAppsScript.Content.TextOutput} JSON { success, students }.
+ */
+function listStudents_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Students');
+  // No "Students" tab, or no data rows → nothing to offer yet.
+  if (!sheet) return json_({ success: true, students: [] });
+
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+  var col = headers.indexOf('Student Names') + 1; // 1-based column; 0 if not found
+  if (col < 1 || sheet.getLastRow() < 2) return json_({ success: true, students: [] });
+
+  var names = sheet
+    .getRange(2, col, sheet.getLastRow() - 1, 1)
+    .getValues()
+    .map(function (row) {
+      return String(row[0]).trim();
+    })
+    .filter(function (name) {
+      return name !== '';
+    });
+
+  // De-duplicate while keeping the order names appear in the column.
+  var seen = {};
+  var unique = names.filter(function (name) {
+    if (seen[name]) return false;
+    seen[name] = true;
+    return true;
+  });
+
+  return json_({ success: true, students: unique });
 }
 
 /** Makes sure the header row exists and includes every canonical column. */

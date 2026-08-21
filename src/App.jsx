@@ -26,7 +26,7 @@ const STORAGE_KEY = 'tuition-hours-logger'
  * doPost(e) handler reads it and writes one row per request.
  */
 const SHEETS_WEB_APP_URL =
-  'https://script.google.com/macros/s/AKfycbyPd6eEVcLeCeyQADgi5-LK7Ca9ZCvr0NCBQoQ0lKd-EnxLfZWWyEleD17RntCVFthH/exec'
+  'https://script.google.com/macros/s/AKfycbyp3v3s2fBYEulh658bO0PIMj8tE25ZSbkynA-ndMh8kRffGdKBBsJQLF-gZLT6RLz0/exec'
 
 /**
  * SUBJECTS
@@ -182,6 +182,24 @@ async function fetchFromSheets() {
   if (!data || !Array.isArray(data.records))
     throw new Error('No valid records returned — check the Apps Script doGet(list) is deployed')
   return data.records
+}
+
+/**
+ * fetchStudentsFromSheets()
+ * GETs the student name list from the Google Sheets backend. The Apps Script's
+ * doGet(e) handler is expected to read e.parameter.action === 'students', look
+ * up the "Students" tab's "Student Names" column, and return
+ * { success: true, students: [...] } (unique, non-empty names).
+ *
+ * @returns {Promise<Array>} Array of student name strings.
+ */
+async function fetchStudentsFromSheets() {
+  const res = await fetch(`${SHEETS_WEB_APP_URL}?action=students`)
+  if (!res.ok) throw new Error(`Google Sheets responded with ${res.status}`)
+  const data = await parseSheetsResponse(res)
+  if (!data || !Array.isArray(data.students))
+    throw new Error('No valid students returned — check the Apps Script doGet(students) is deployed')
+  return data.students
 }
 
 /**
@@ -457,6 +475,11 @@ export default function App() {
   const [deletingId, setDeletingId] = useState(null)
   // Counter bumped by the Refresh button to re-trigger the fetch effect.
   const [recordsRefresh, setRecordsRefresh] = useState(0)
+  // Student names fetched from the "Students" tab of the Google Sheet, used to
+  // render the Student field as a strict dropdown instead of a text box.
+  const [students, setStudents] = useState([])
+  // True while the student list is being fetched from the sheet.
+  const [studentsLoading, setStudentsLoading] = useState(true)
 
   // ---------- Side effect: persist sessions ----------
 
@@ -465,6 +488,28 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions))
   }, [sessions])
+
+  // Fetch the student name list from the Google Sheet once, on mount, so the
+  // Student field can render as a strict dropdown instead of a text box. If the
+  // fetch fails (or the tab has no names), `students` stays empty and the form
+  // falls back to a plain text input so logging is never blocked. A `cancelled`
+  // flag prevents a stale response from overwriting state after unmount.
+  useEffect(() => {
+    let cancelled = false
+    fetchStudentsFromSheets()
+      .then(names => {
+        if (!cancelled) setStudents(names)
+      })
+      .catch(() => {
+        // Leave students empty → the form falls back to a text input.
+      })
+      .finally(() => {
+        if (!cancelled) setStudentsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Fetch the record list from Google Sheets whenever the All Records tab is
   // shown, and again whenever the user clicks Refresh (recordsRefresh bumps).
@@ -856,13 +901,38 @@ export default function App() {
 
           <div className="field">
             <label htmlFor="student">Student</label>
-            <input
-              id="student"
-              type="text"
-              placeholder="e.g. Sara Ahmed"
-              value={form.student}
-              onChange={e => setField('student', e.target.value)}
-            />
+            {/* Strict dropdown: options come from the "Students" tab's "Student
+                Names" column in the Google Sheet. Falls back to a free-text
+                input only if the list can't be loaded (offline / not deployed). */}
+            {studentsLoading || students.length > 0 ? (
+              <select
+                id="student"
+                value={form.student}
+                onChange={e => setField('student', e.target.value)}
+              >
+                <option value="" disabled>
+                  {studentsLoading ? 'Loading students…' : 'Select a student…'}
+                </option>
+                {students.map(name => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+                {/* Keep the current value as an option so editing an older
+                    session whose student isn't (yet) in the list still works. */}
+                {form.student && !students.includes(form.student) && (
+                  <option value={form.student}>{form.student}</option>
+                )}
+              </select>
+            ) : (
+              <input
+                id="student"
+                type="text"
+                placeholder="e.g. Sara Ahmed"
+                value={form.student}
+                onChange={e => setField('student', e.target.value)}
+              />
+            )}
           </div>
 
           <div className="field">
