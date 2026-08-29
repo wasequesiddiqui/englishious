@@ -552,6 +552,31 @@
   white-space: nowrap;
 }
 
+.th-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+
+.th-sortable:hover {
+  color: var(--text);
+}
+
+.th-sorted {
+  color: var(--primary-strong);
+}
+
+.sort-arrow {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: 0.3;
+}
+
+.sort-arrow.active {
+  opacity: 1;
+}
+
 .records-table td {
   padding: 10px;
   border-bottom: 1px solid var(--border);

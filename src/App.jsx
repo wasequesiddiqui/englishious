@@ -439,6 +439,38 @@ function BarList({ items, max, format, label }) {
   )
 }
 
+/**
+ * SortableTh — presentational component
+ * Renders a clickable table header cell for the All Records table. Clicking
+ * it sorts the table by that column; the active column is highlighted and
+ * shows an arrow (▲ ascending / ▼ descending), while inactive columns show a
+ * faint up/down glyph to hint that they're sortable. Also sets the native
+ * aria-sort attribute for screen readers.
+ *
+ * @param {object} props
+ * @param {string} props.label - Column header text.
+ * @param {string} props.sortKey - The session field this column sorts by (e.g. 'date', 'start', 'minutes').
+ * @param {string} props.activeKey - The currently active sort key.
+ * @param {string} props.dir - Current sort direction: 'asc' or 'desc'.
+ * @param {Function} props.onSort - Handler called with the sortKey when the header is clicked.
+ */
+function SortableTh({ label, sortKey, activeKey, dir, onSort }) {
+  const active = activeKey === sortKey
+  return (
+    <th
+      className={`th-sortable${active ? ' th-sorted' : ''}`}
+      aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      title={`Sort by ${label}`}
+      onClick={() => onSort(sortKey)}
+    >
+      {label}
+      <span className={`sort-arrow${active ? ' active' : ''}`} aria-hidden="true">
+        {active ? (dir === 'asc' ? '▲' : '▼') : '⇅'}
+      </span>
+    </th>
+  )
+}
+
 /* ---------- main app ---------- */
 
 /**
@@ -475,6 +507,10 @@ export default function App() {
   const [deletingId, setDeletingId] = useState(null)
   // Counter bumped by the Refresh button to re-trigger the fetch effect.
   const [recordsRefresh, setRecordsRefresh] = useState(0)
+  // Text typed into the All Records search box (filters the fetched records).
+  const [recordsSearch, setRecordsSearch] = useState('')
+  // Active sort for the All Records table: { key, dir } where dir is 'asc'|'desc'.
+  const [recordsSort, setRecordsSort] = useState({ key: 'date', dir: 'desc' })
   // Student names fetched from the "Students" tab of the Google Sheet, used to
   // render the Student field as a strict dropdown instead of a text box.
   const [students, setStudents] = useState([])
@@ -620,6 +656,38 @@ export default function App() {
       .slice(0, 6)
     return { total, week, month, byStudent, bySubject, byMonth }
   }, [sessions])
+
+  /**
+   * `visibleRecords`
+   * The fetched sheet records filtered by the All Records search box and sorted
+   * by the active column/direction. Search matches student, subject, notes,
+   * date, and the time range (all case-insensitive). Numeric columns (e.g.
+   * duration/minutes) compare as numbers; everything else compares as strings
+   * (ISO dates sort correctly lexicographically). Rebuilt only when the source
+   * records, search text, or sort config change.
+   */
+  const visibleRecords = useMemo(() => {
+    const q = recordsSearch.trim().toLowerCase()
+    const rows = q
+      ? sheetRecords.filter(s =>
+          [s.student, s.subject, s.notes, s.date, `${s.start}–${s.end}`].some(field =>
+            (field || '').toLowerCase().includes(q),
+          ),
+        )
+      : sheetRecords
+    const { key, dir } = recordsSort
+    return [...rows].sort((a, b) => {
+      const av = a[key]
+      const bv = b[key]
+      let cmp
+      if (typeof av === 'number' && typeof bv === 'number') {
+        cmp = av - bv
+      } else {
+        cmp = String(av ?? '').localeCompare(String(bv ?? ''))
+      }
+      return dir === 'asc' ? cmp : -cmp
+    })
+  }, [sheetRecords, recordsSearch, recordsSort])
 
   // Live duration preview for the times currently typed into the form (0 when
   // either field is empty or the range is invalid).
@@ -781,6 +849,24 @@ export default function App() {
     } finally {
       setDeletingId(null)
     }
+  }
+
+  /**
+   * handleRecordsSort(key)
+   * Updates the All Records sort config. Clicking a new column sorts ascending
+   * by it (dates default to newest-first instead); clicking the active column
+   * again toggles the direction.
+   *
+   * @param {string} key - The field to sort by (date, student, subject, start, minutes, notes).
+   */
+  function handleRecordsSort(key) {
+    setRecordsSort(prev => {
+      if (prev.key === key) {
+        return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      }
+      // Dates sort newest-first by default; other columns start ascending.
+      return { key, dir: key === 'date' ? 'desc' : 'asc' }
+    })
   }
 
   /**
@@ -1099,9 +1185,18 @@ export default function App() {
             <div className="list-head">
               <h2>All Records</h2>
               <div className="records-tools">
+                <div className="search-wrap">
+                  <span className="search-icon" aria-hidden="true">🔍</span>
+                  <input
+                    type="search"
+                    placeholder="Search records…"
+                    value={recordsSearch}
+                    onChange={e => setRecordsSearch(e.target.value)}
+                  />
+                </div>
                 <span className="records-count">
-                  {sheetRecords.length} session{sheetRecords.length === 1 ? '' : 's'} from Google
-                  Sheets
+                  {visibleRecords.length} of {sheetRecords.length} session
+                  {sheetRecords.length === 1 ? '' : 's'} from Google Sheets
                 </span>
                 <button
                   className="btn btn-outline btn-sm"
@@ -1130,22 +1225,63 @@ export default function App() {
                 <span className="empty-icon" aria-hidden="true">📭</span>
                 <p>No records found in Google Sheets yet.</p>
               </div>
+            ) : visibleRecords.length === 0 ? (
+              <div className="empty">
+                <span className="empty-icon" aria-hidden="true">🔍</span>
+                <p>No records match your search.</p>
+              </div>
             ) : (
               <div className="table-wrap">
                 <table className="records-table">
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Student</th>
-                      <th>Subject</th>
-                      <th>Time</th>
-                      <th>Duration</th>
-                      <th>Notes</th>
+                      <SortableTh
+                        label="Date"
+                        sortKey="date"
+                        activeKey={recordsSort.key}
+                        dir={recordsSort.dir}
+                        onSort={handleRecordsSort}
+                      />
+                      <SortableTh
+                        label="Student"
+                        sortKey="student"
+                        activeKey={recordsSort.key}
+                        dir={recordsSort.dir}
+                        onSort={handleRecordsSort}
+                      />
+                      <SortableTh
+                        label="Subject"
+                        sortKey="subject"
+                        activeKey={recordsSort.key}
+                        dir={recordsSort.dir}
+                        onSort={handleRecordsSort}
+                      />
+                      <SortableTh
+                        label="Time"
+                        sortKey="start"
+                        activeKey={recordsSort.key}
+                        dir={recordsSort.dir}
+                        onSort={handleRecordsSort}
+                      />
+                      <SortableTh
+                        label="Duration"
+                        sortKey="minutes"
+                        activeKey={recordsSort.key}
+                        dir={recordsSort.dir}
+                        onSort={handleRecordsSort}
+                      />
+                      <SortableTh
+                        label="Notes"
+                        sortKey="notes"
+                        activeKey={recordsSort.key}
+                        dir={recordsSort.dir}
+                        onSort={handleRecordsSort}
+                      />
                       <th className="th-actions">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sheetRecords.map(s => (
+                    {visibleRecords.map(s => (
                       <tr key={s.id} className={deletingId === s.id ? 'row-deleting' : ''}>
                         <td className="td-date">{s.date ? formatDate(s.date) : '—'}</td>
                         <td className="td-student">{s.student || '—'}</td>
