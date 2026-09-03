@@ -1,13 +1,14 @@
 // React Hooks used throughout the app:
-// - useState: holds component state (sessions, form fields, UI flags, etc.).
+// - useState: holds component state (records, form fields, UI flags, etc.).
 //   Each call returns [value, setValue]; calling setValue re-renders the
-//   component with the new value. Example: const [search, setSearch] = useState('')
-// - useEffect: runs side effects (persisting data, fetching from Google Sheets)
+//   component with the new value. Example: const [records, setRecords] = useState([])
+// - useEffect: runs side effects (fetching data from Google Sheets, etc.)
 //   AFTER a render. The dependency array at the end controls when it re-runs.
-//   Example: useEffect(() => { ... }, [sessions]) re-runs only when `sessions` changes.
+//   Example: useEffect(() => { ... }, [recordsRefresh]) re-runs only when the
+//   refresh counter changes.
 // - useMemo: caches expensive computed values so they are only recalculated
 //   when the listed dependencies change. Example:
-//   const sorted = useMemo(() => ..., [sessions])
+//   const totals = useMemo(() => ..., [records])
 import { useEffect, useMemo, useState } from 'react'
 
 // Global stylesheet (layout, cards, bars, buttons, form fields, etc.).
@@ -18,28 +19,13 @@ import logo from './assets/Logo.png'
 // ---------- Module-level constants ----------
 
 /**
- * STORAGE_KEY
- * The localStorage key under which all logged sessions are persisted.
- * Browsers persist data per-origin, so this key must stay consistent between
- * page reloads to avoid losing the user's session history.
- *
- * Example of what is stored under this key (a JSON array of session objects):
- *   [
- *     { "id": "3f2b…", "student": "Sara Ahmed", "subject": "English Literature",
- *       "date": "2026-08-29", "start": "10:00", "end": "11:30",
- *       "notes": "Macbeth themes", "minutes": 90, "createdAt": 1785400000000 }
- *   ]
- */
-const STORAGE_KEY = 'tuition-hours-logger'
-
-/**
  * SHEETS_WEB_APP_URL
  * The public endpoint of the Google Apps Script Web App that appends rows to
  * a Google Sheet. A POST to this URL sends a JSON payload; the script's
  * doPost(e) handler reads it and writes one row per request.
  *
  * This same URL is used for every sheet interaction:
- *   - POST with a JSON body  → add / update / delete a row (postToSheets, deleteFromSheets)
+ *   - POST with a JSON body  → add / delete a row (postToSheets, deleteFromSheets)
  *   - GET  ?action=list      → fetch all records (fetchFromSheets)
  *   - GET  ?action=students  → fetch the student names (fetchStudentsFromSheets)
  */
@@ -52,14 +38,6 @@ const SHEETS_WEB_APP_URL =
  * dropdown so only these options can be chosen (no free-text entry).
  */
 const SUBJECTS = ['English Literature', 'English Language', 'English General']
-
-/**
- * MONTHS
- * Short English month names (Jan–Dec), indexed by (monthNumber - 1). Used to
- * render the day/month badge next to each session in the log list without
- * needing a locale-aware date formatter.
- */
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /* ---------- helpers ---------- */
 
@@ -94,32 +72,10 @@ function toISODate(d = new Date()) {
  *
  * Example return value (date = today):
  *   { student: '', subject: '', date: '2026-08-29', start: '', end: '', notes: '' }
- * Used to initialise the form and to reset it after every save/cancel.
+ * Used to initialise the form and to reset it after every save.
  */
 function emptyForm() {
   return { student: '', subject: '', date: toISODate(), start: '', end: '', notes: '' }
-}
-
-/**
- * loadSessions()
- * Reads previously saved sessions out of localStorage. Used as the lazy
- * initializer for the `sessions` state so data is restored on first render.
- * Wrapped in try/catch because localStorage can throw (e.g. disabled storage,
- * corrupted JSON) — in that case we fall back to an empty list.
- *
- * @returns {Array} Array of saved session objects (empty if none / on error).
- *
- * Example: if localStorage holds '[{"student":"Sara Ahmed","minutes":90}]',
- * this returns the parsed array. If the key is missing (first visit) it
- * returns [], and if the JSON is corrupted it returns [] instead of crashing.
- */
-function loadSessions() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
 }
 
 /**
@@ -148,6 +104,34 @@ function calcMinutes(start, end) {
 }
 
 /**
+ * addMinutesToTime(time, mins)
+ * Adds a number of minutes to an "HH:MM" time string and returns the result as
+ * another "HH:MM" string. Wraps past midnight (e.g. 23:30 + 60 → 00:30) so the
+ * value always stays within one day. Returns '' when the input is missing or
+ * not a valid "HH:MM" time.
+ *
+ * @param {string} time - Start time in 24h "HH:MM" format.
+ * @param {number} mins - Minutes to add (e.g. 60 for one hour).
+ * @returns {string} Resulting "HH:MM" time string (or '' if time is invalid).
+ *
+ * Examples:
+ *   addMinutesToTime('10:00', 60) → '11:00'   (one hour later)
+ *   addMinutesToTime('23:30', 60) → '00:30'   (wraps past midnight)
+ *   addMinutesToTime('', 60)      → ''        (missing start time)
+ * Used by handleStartChange() to pre-fill the End time with a sensible default.
+ */
+function addMinutesToTime(time, mins) {
+  if (!time) return ''
+  const [h, m] = time.split(':').map(Number)
+  if (Number.isNaN(h) || Number.isNaN(m)) return ''
+  // Add the minutes, then keep the total within 0…1439 (one full day).
+  const total = (h * 60 + m + mins) % (24 * 60)
+  const nh = String(Math.floor(total / 60)).padStart(2, '0')
+  const nm = String(total % 60).padStart(2, '0')
+  return `${nh}:${nm}`
+}
+
+/**
  * formatMinutes(mins)
  * Converts a number of minutes into a compact, human-readable duration string
  * such as "45m", "2h", or "2h 30m" (units are omitted when zero).
@@ -159,8 +143,8 @@ function calcMinutes(start, end) {
  *   formatMinutes(45)  → "45m"
  *   formatMinutes(120) → "2h"
  *   formatMinutes(150) → "2h 30m"
- * Used everywhere a human-readable duration is shown (stat cards, session log,
- * records table, live form preview, breakdown bars).
+ * Used everywhere a human-readable duration is shown (stat cards, the All
+ * Records table, the live form preview, and the breakdown bars).
  */
 function formatMinutes(mins) {
   const h = Math.floor(mins / 60)
@@ -408,13 +392,13 @@ function toTimeStr(value) {
 /**
  * formatDate(dateStr)
  * Formats an ISO date string (YYYY-MM-DD) into a friendly, localized label
- * like "Mon, Aug 10, 2026" for display in the session log.
+ * like "Mon, Aug 10, 2026" for display in the All Records table.
  *
  * @param {string} dateStr - Date in "YYYY-MM-DD" format.
  * @returns {string} Human-readable date string.
  *
  * Example: formatDate('2026-08-10') → "Mon, Aug 10, 2026"
- * Used in the Session Log items and the All Records table.
+ * Used in the All Records table.
  */
 function formatDate(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -592,31 +576,37 @@ function SortableTh({ label, sortKey, activeKey, dir, onSort }) {
 
 /**
  * App — main application component
- * Owns all application state (sessions, form, search, UI flags) and renders
- * the entire UI: header, stats cards, add/edit form, session log with search,
- * and the breakdown charts (top students, top subjects, monthly).
+ * Owns all application state (records, form, UI flags) and renders the entire
+ * UI: header, stats cards, add form, and the breakdown charts. Google Sheets
+ * is the single source of truth — the Dashboard stats/breakdowns and the All
+ * Records table are all computed from the records fetched from the sheet.
  */
 export default function App() {
   // ---------- State ----------
   // Everything the UI needs is held here. Each useState gives [value, setValue];
   // calling the setter schedules a re-render with the new value.
 
-  // The full list of logged sessions, restored from localStorage on first render
-  // (loadSessions is the lazy initializer). This is the single source of truth
-  // for the Dashboard. Each session looks like:
+  // The full list of sessions fetched from Google Sheets. This is the single
+  // source of truth for the whole app — the Dashboard stats/breakdowns and the
+  // All Records table are all derived from it. Each record looks like:
   //   { id, student, subject, date: 'YYYY-MM-DD', start: 'HH:MM', end: 'HH:MM',
   //     notes, minutes, createdAt }
-  const [sessions, setSessions] = useState(loadSessions)
-  // The current values of the add/edit form fields (student, subject, date, …).
+  const [records, setRecords] = useState([])
+  // True while a record fetch from Google Sheets is in flight (used to show the
+  // loading state and to disable the Refresh button). Starts true because the
+  // app fetches records as soon as it mounts.
+  const [recordsLoading, setRecordsLoading] = useState(true)
+  // Error message if the sheet fetch/delete fails (empty string = none).
+  const [recordsError, setRecordsError] = useState('')
+  // Id of the record currently being deleted from the sheet (spinner state).
+  // Non-null while a delete request is in flight; disables other delete buttons.
+  const [deletingId, setDeletingId] = useState(null)
+  // Counter bumped by the Refresh button to re-trigger the fetch effect
+  // (it is listed in the fetch effect's dependency array).
+  const [recordsRefresh, setRecordsRefresh] = useState(0)
+  // The current values of the add form fields (student, subject, date, …).
   // Kept in sync with the inputs via setField(); initialised by emptyForm().
   const [form, setForm] = useState(emptyForm)
-  // The id of the session currently being edited, or null when adding new.
-  // When non-null the form heading becomes "✏️ Edit Session" and the submit
-  // button becomes "Update Session".
-  const [editingId, setEditingId] = useState(null)
-  // The text typed into the search box; used to filter the session log
-  // (recomputed into `filtered` below).
-  const [search, setSearch] = useState('')
   // Validation/error message shown near the form (empty string = no error).
   // Example: "End time must be after start time."
   const [error, setError] = useState('')
@@ -627,20 +617,6 @@ export default function App() {
   // Toggled by the two tab buttons and read in the JSX to decide which view
   // to render.
   const [activeTab, setActiveTab] = useState('dashboard')
-  // Records fetched from Google Sheets for the "All Records" tab (already
-  // normalised to the app's session shape by normalizeSheetRecord).
-  const [sheetRecords, setSheetRecords] = useState([])
-  // True while the sheet fetch is in flight (shows the loading state and
-  // disables the Refresh button).
-  const [recordsLoading, setRecordsLoading] = useState(false)
-  // Error message if the sheet fetch/delete fails (empty string = none).
-  const [recordsError, setRecordsError] = useState('')
-  // Id of the record currently being deleted from the sheet (spinner state).
-  // Non-null while a delete request is in flight; disables other delete buttons.
-  const [deletingId, setDeletingId] = useState(null)
-  // Counter bumped by the Refresh button to re-trigger the fetch effect
-  // (it is listed in the fetch effect's dependency array).
-  const [recordsRefresh, setRecordsRefresh] = useState(0)
   // Text typed into the All Records search box (filters the fetched records).
   const [recordsSearch, setRecordsSearch] = useState('')
   // Active sort for the All Records table: { key, dir } where dir is 'asc'|'desc'.
@@ -652,16 +628,7 @@ export default function App() {
   // True while the student list is being fetched from the sheet.
   const [studentsLoading, setStudentsLoading] = useState(true)
 
-  // ---------- Side effect: persist sessions ----------
-
-  // Every time `sessions` changes (add/edit/delete), write the whole array to
-  // localStorage so the data survives page reloads.
-  // Example: after adding a session, this stores
-  //   'tuition-hours-logger' → '[{"id":"…","student":"Sara Ahmed",…}]'
-  // so the data is still there when the page is reopened.
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions))
-  }, [sessions])
+  // ---------- Side effects ----------
 
   // Fetch the student name list from the Google Sheet once, on mount, so the
   // Student field can render as a strict dropdown instead of a text box. If the
@@ -689,22 +656,24 @@ export default function App() {
     }
   }, [])
 
-  // Fetch the record list from Google Sheets whenever the All Records tab is
-  // shown, and again whenever the user clicks Refresh (recordsRefresh bumps).
-  // A `cancelled` flag prevents a stale response from overwriting newer state
-  // if the user switches tabs before the request resolves.
+  // Fetch the full record list from Google Sheets on mount (so the Dashboard
+  // stats are populated straight away) and again whenever `recordsRefresh`
+  // changes. recordsLoading is already true on mount; the 🔄 Refresh button
+  // (refreshRecords below) sets it true again before bumping the counter. A
+  // `cancelled` flag prevents a stale response from overwriting newer state if
+  // the component unmounts mid-request.
   //
-  // Example: entering the tab runs fetchFromSheets(); each raw row is mapped
-  // through normalizeSheetRecord() into the app's session shape and stored in
-  // sheetRecords, which feeds `visibleRecords` and the table below.
+  // Example: the fetch runs fetchFromSheets(); each raw row is mapped through
+  // normalizeSheetRecord() into the app's session shape and stored in
+  // `records`, which feeds the Dashboard stats/breakdowns and the table below.
   useEffect(() => {
-    if (activeTab !== 'records') return
     let cancelled = false
-    setRecordsLoading(true)
-    setRecordsError('')
     fetchFromSheets()
       .then(rows => {
-        if (!cancelled) setSheetRecords(rows.map(normalizeSheetRecord))
+        if (cancelled) return
+        setRecords(rows.map(normalizeSheetRecord))
+        // A successful fetch clears any previous error message.
+        setRecordsError('')
       })
       .catch(err => {
         if (cancelled) return
@@ -722,58 +691,27 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [activeTab, recordsRefresh])
+  }, [recordsRefresh])
+
+  /**
+   * refreshRecords()
+   * Starts a fresh fetch from Google Sheets. Because recordsLoading must be
+   * turned on and any stale error cleared before the fetch begins, that work
+   * happens here — in an event handler (the 🔄 Refresh button) rather than
+   * inside the effect body — and then `recordsRefresh` is bumped to re-run the
+   * fetch effect above.
+   *
+   * Example: clicking 🔄 Refresh calls refreshRecords(), which shows the
+   * loading state and re-triggers the effect; when it resolves, recordsLoading
+   * flips back to false and `records` holds the up-to-date rows.
+   */
+  function refreshRecords() {
+    setRecordsError('')
+    setRecordsLoading(true)
+    setRecordsRefresh(n => n + 1)
+  }
 
   // ---------- Derived values (memoized) ----------
-
-  /**
-   * `sorted`
-   * Sessions sorted newest-first: primarily by date descending, and for
-   * sessions on the same day by start time descending (latest session first).
-   * Rebuilt only when `sessions` changes.
-   *
-   * Example: sessions dated 2026-08-20 and 2026-08-29 sort so 2026-08-29
-   * appears first; two sessions both dated 2026-08-29 at 10:00 and 14:00 put
-   * the 14:00 one on top.
-   */
-  const sorted = useMemo(
-    () =>
-      [...sessions].sort((a, b) =>
-        a.date === b.date ? b.start.localeCompare(a.start) : b.date.localeCompare(a.date),
-      ),
-    [sessions],
-  )
-
-  /**
-   * `localIds`
-   * Set of session ids that exist in local storage. Used by the All Records
-   * table to only offer the Edit action for records we also have locally (so
-   * pre-filling the form always works); every fetched record gets Delete.
-   *
-   * Example: if local sessions have ids ['a','b'], then localIds.has('a') === true
-   * and localIds.has('c') === false (so record 'c' gets no Edit button).
-   */
-  const localIds = useMemo(() => new Set(sessions.map(s => s.id)), [sessions])
-
-  /**
-   * `filtered`
-   * The list shown in the UI: `sorted` filtered by the search query against
-   * student, subject, and notes (case-insensitive). If the query is empty the
-   * full sorted list is returned. Recomputed when `sorted` or `search` change.
-   *
-   * Example: searching "sara" matches a session whose student is "Sara Ahmed";
-   * searching "macbeth" matches a session whose notes mention "Macbeth".
-   */
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return sorted
-    return sorted.filter(
-      s =>
-        s.student.toLowerCase().includes(q) ||
-        s.subject.toLowerCase().includes(q) ||
-        (s.notes || '').toLowerCase().includes(q),
-    )
-  }, [sorted, search])
 
   /**
    * `totals`
@@ -781,7 +719,7 @@ export default function App() {
    * - total / week / month: total minutes overall, since Monday, and this month.
    * - byStudent / bySubject: top 5 students / subjects by total minutes.
    * - byMonth: the 6 most recent months with minutes, newest first.
-   * Recomputed only when `sessions` changes.
+   * Recomputed only when `records` (the Google Sheets data) changes.
    *
    * Example shape:
    *   { total: 570, week: 210, month: 480,
@@ -792,22 +730,22 @@ export default function App() {
   const totals = useMemo(() => {
     const today = toISODate()
     const weekStart = startOfCurrentWeekISO()
-    // Lifetime total across all sessions.
-    const total = sessions.reduce((sum, s) => sum + s.minutes, 0)
+    // Lifetime total across all records.
+    const total = records.reduce((sum, s) => sum + s.minutes, 0)
     // Minutes between this week's Monday and today (string comparison works
     // because dates are ISO YYYY-MM-DD).
-    const week = sessions
+    const week = records
       .filter(s => s.date >= weekStart && s.date <= today)
       .reduce((sum, s) => sum + s.minutes, 0)
     // Minutes where the date starts with the current "YYYY-MM" prefix.
-    const month = sessions
+    const month = records
       .filter(s => s.date.startsWith(today.slice(0, 7)))
       .reduce((sum, s) => sum + s.minutes, 0)
     // Top 5 students and subjects by aggregate minutes.
-    const byStudent = aggregateBy(sessions, s => s.student).slice(0, 5)
-    const bySubject = aggregateBy(sessions, s => s.subject).slice(0, 5)
+    const byStudent = aggregateBy(records, s => s.student).slice(0, 5)
+    const bySubject = aggregateBy(records, s => s.subject).slice(0, 5)
     // Group minutes by month key (YYYY-MM), sort newest first, keep 6 months.
-    const byMonth = [...sessions
+    const byMonth = [...records
       .reduce((map, s) => {
         const k = s.date.slice(0, 7)
         map.set(k, (map.get(k) || 0) + s.minutes)
@@ -817,16 +755,16 @@ export default function App() {
       .sort((a, b) => b[0].localeCompare(a[0]))
       .slice(0, 6)
     return { total, week, month, byStudent, bySubject, byMonth }
-  }, [sessions])
+  }, [records])
 
   /**
    * `visibleRecords`
-   * The fetched sheet records filtered by the All Records search box and sorted
-   * by the active column/direction. Search matches student, subject, notes,
-   * date, and the time range (all case-insensitive). Numeric columns (e.g.
-   * duration/minutes) compare as numbers; everything else compares as strings
-   * (ISO dates sort correctly lexicographically). Rebuilt only when the source
-   * records, search text, or sort config change.
+   * The records fetched from Google Sheets, filtered by the All Records search
+   * box and sorted by the active column/direction. Search matches student,
+   * subject, notes, date, and the time range (all case-insensitive). Numeric
+   * columns (e.g. duration/minutes) compare as numbers; everything else
+   * compares as strings (ISO dates sort correctly lexicographically). Rebuilt
+   * only when the source records, search text, or sort config change.
    *
    * Example: searching "10:00" matches records whose start or end is 10:00;
    * searching "aug" matches dates like "2026-08-10".
@@ -834,12 +772,12 @@ export default function App() {
   const visibleRecords = useMemo(() => {
     const q = recordsSearch.trim().toLowerCase()
     const rows = q
-      ? sheetRecords.filter(s =>
+      ? records.filter(s =>
           [s.student, s.subject, s.notes, s.date, `${s.start}–${s.end}`].some(field =>
             (field || '').toLowerCase().includes(q),
           ),
         )
-      : sheetRecords
+      : records
     const { key, dir } = recordsSort
     return [...rows].sort((a, b) => {
       const av = a[key]
@@ -852,7 +790,7 @@ export default function App() {
       }
       return dir === 'asc' ? cmp : -cmp
     })
-  }, [sheetRecords, recordsSearch, recordsSort])
+  }, [records, recordsSearch, recordsSort])
 
   // Live duration preview for the times currently typed into the form (0 when
   // either field is empty or the range is invalid). Recomputed every render, so
@@ -883,18 +821,43 @@ export default function App() {
   }
 
   /**
+   * handleStartChange(value)
+   * Handles the Start time input. Stores the typed value in form.start and,
+   * if the End time is still empty, pre-fills it with a sensible default of
+   * start + 1 hour via addMinutesToTime(). An End time the user has already
+   * chosen is left untouched (the auto-default only fills a blank End field).
+   *
+   * @param {string} value - The new start time in "HH:MM" format.
+   *
+   * Example: the user types 10:00 with no end time → form.start = '10:00' and
+   * form.end = '11:00', and the live duration preview shows "1h" straight away.
+   * Wired to the Start time input's onChange.
+   */
+  function handleStartChange(value) {
+    setField('start', value)
+    // Only auto-fill the End time when it hasn't been set yet.
+    if (!form.end && value) {
+      const defaultEnd = addMinutesToTime(value, 60)
+      if (defaultEnd) setField('end', defaultEnd)
+    }
+  }
+
+  /**
    * handleSubmit(e)
-   * Runs when the form is submitted (Add or Update Session). Validates that
-   * required fields are filled and the time range is positive, builds a session
-   * object, saves it locally (inserting or replacing depending on `editingId`),
-   * resets the form, then fires a best-effort sync to Google Sheets.
+   * Runs when the Add Session form is submitted. Validates that the required
+   * fields are filled and the time range is positive, builds a session object,
+   * then POSTs it to Google Sheets. Google Sheets is the ONLY store for the
+   * data — there is no separate local copy — so the row must be written there
+   * before it is reflected anywhere in the UI.
    *
    * @param {Event} e - The form submit event (prevented to avoid a page reload).
    *
    * Example: a new session with student "Sara Ahmed", subject "English
-   * Literature", date 2026-08-29, 10:00–11:30 gets minutes 90 and is appended
-   * to `sessions`, then POSTed to the sheet as { action: 'add', ... }. The
-   * status banner shows "Saving to Google Sheets…" → "✓ Saved to Google Sheets".
+   * Literature", date 2026-08-29, 10:00–11:30 gets minutes 90 and is POSTed to
+   * the sheet as { action: 'add', ... }. On success the session is appended to
+   * `records` (so the Dashboard reflects it immediately) and the status banner
+   * shows "Saving to Google Sheets…" → "✓ Saved to Google Sheets". On failure
+   * the form is left intact so the user can retry.
    */
   async function handleSubmit(e) {
     e.preventDefault()
@@ -908,10 +871,9 @@ export default function App() {
       setError('End time must be after start time.')
       return
     }
-    // Build the session object. A brand-new session gets a random UUID; an
-    // existing one keeps its original id so it can be matched for replacement.
+    // Build the session object with a fresh random UUID.
     const session = {
-      id: editingId || crypto.randomUUID(),
+      id: crypto.randomUUID(),
       student: form.student.trim(),
       subject: form.subject.trim(),
       date: form.date,
@@ -921,23 +883,11 @@ export default function App() {
       minutes,
       createdAt: Date.now(),
     }
-    // Insert the new session, or replace the one being edited by id.
-    setSessions(prev =>
-      editingId ? prev.map(s => (s.id === editingId ? session : s)) : [...prev, session],
-    )
-    // Reset the form back to blank and exit edit mode.
-    setForm(emptyForm())
-    setEditingId(null)
-    setError('')
-
-    // Fire-and-forget sync to Google Sheets (the local save above is already done).
-    // The Apps Script endpoint appends a row on every POST, so add and update both
-    // just log the session.
-    const action = editingId ? 'update' : 'add'
     setSyncStatus({ type: 'saving', msg: 'Saving to Google Sheets…' })
     try {
+      // POST the new row to the sheet — this is the authoritative save.
       await postToSheets({
-        action,
+        action: 'add',
         id: session.id,
         // Fields expected by the Apps Script doPost(e):
         timestamp: new Date().toISOString(),
@@ -951,78 +901,31 @@ export default function App() {
         minutes: session.minutes,
         hours: toDecimalHours(session.minutes),
       })
+      // The sheet now holds the row, so mirror it into `records` to keep the
+      // Dashboard and All Records in sync without an extra round-trip.
+      setRecords(prev => [...prev, session])
+      setForm(emptyForm())
+      setError('')
       setSyncStatus({ type: 'ok', msg: '✓ Saved to Google Sheets' })
     } catch {
-      setSyncStatus({ type: 'error', msg: '⚠ Could not reach Google Sheets (saved locally)' })
+      // Nothing was written anywhere, so keep the form populated for a retry.
+      setSyncStatus({ type: 'error', msg: '⚠ Could not reach Google Sheets — nothing was saved' })
     }
-  }
-
-  /**
-   * handleEdit(session)
-   * Puts the app into edit mode for the given session: remembers its id in
-   * `editingId` and pre-fills the form with the session's current values so the
-   * user can modify and resubmit it.
-   *
-   * @param {object} session - The session object the user clicked Edit on.
-   *
-   * Example: clicking ✏️ on { id: 'x', student: 'Sara', start: '10:00', … } sets
-   * editingId = 'x' and fills the form with Sara's values; submitting then
-   * REPLACES that session (keeping id 'x') instead of adding a new one.
-   * Wired to the ✏️ buttons in the Session Log and the All Records table.
-   */
-  function handleEdit(session) {
-    setEditingId(session.id)
-    setForm({
-      student: session.student,
-      subject: session.subject,
-      date: session.date,
-      start: session.start,
-      end: session.end,
-      notes: session.notes || '',
-    })
-    setError('')
-  }
-
-  /**
-   * handleDelete(id)
-   * Deletes a session from local state after a confirmation dialog. If the
-   * deleted session was the one being edited, edit mode is cancelled and the
-   * form is reset. Google Sheets is append-only, so deletion is local-only.
-   *
-   * @param {string} id - The id of the session to delete.
-   *
-   * Example: clicking 🗑️ calls handleDelete(session.id); after confirming the
-   * alert, that session is filtered out of `sessions` and the status banner
-   * reads "🗑 Deleted locally — Google Sheets is append-only".
-   * Wired to the 🗑️ buttons in the Session Log.
-   */
-  function handleDelete(id) {
-    if (!window.confirm('Delete this session?')) return
-    setSessions(prev => prev.filter(s => s.id !== id))
-    if (editingId === id) {
-      setEditingId(null)
-      setForm(emptyForm())
-    }
-    // The Google Sheets endpoint is append-only, so nothing to sync on delete.
-    setSyncStatus({
-      type: 'ok',
-      msg: '🗑 Deleted locally — Google Sheets is append-only',
-    })
   }
 
   /**
    * handleSheetDelete(id)
    * Deletes a record from the Google Sheet itself. Asks for confirmation, then
    * POSTs { action: 'delete', id } to the Apps Script. On success the row is
-   * removed from the fetched list and (if it also existed locally) from local
-   * state so the dashboard stats stay in sync. The row is disabled while the
+   * removed from `records` (the in-memory mirror of the sheet) so the Dashboard
+   * stats and the All Records table stay in sync. The row is disabled while the
    * request is in flight.
    *
    * @param {string} id - The id of the record to delete from the sheet.
    *
    * Example: the All Records 🗑️ button calls handleSheetDelete(s.id). While the
    * request runs, deletingId = s.id (spinner state); on success the row is
-   * removed from BOTH sheetRecords and sessions.
+   * removed from `records`.
    * Wired to the 🗑️ buttons in the All Records table.
    */
   async function handleSheetDelete(id) {
@@ -1031,8 +934,8 @@ export default function App() {
     setRecordsError('')
     try {
       await deleteFromSheets(id)
-      setSheetRecords(prev => prev.filter(s => s.id !== id))
-      setSessions(prev => prev.filter(s => s.id !== id))
+      // Remove the row from `records` so the Dashboard/All Records stay in sync.
+      setRecords(prev => prev.filter(s => s.id !== id))
       setSyncStatus({ type: 'ok', msg: '🗑 Deleted from Google Sheets' })
     } catch {
       setSyncStatus({ type: 'error', msg: '⚠ Could not delete from Google Sheets' })
@@ -1068,25 +971,11 @@ export default function App() {
   }
 
   /**
-   * cancelEdit()
-   * Exits edit mode without saving: clears `editingId`, resets the form to a
-   * blank one, and removes any visible error message.
-   *
-   * Wired to the "Cancel" button that appears next to the submit button only
-   * while an edit is in progress (editingId is truthy).
-   */
-  function cancelEdit() {
-    setEditingId(null)
-    setForm(emptyForm())
-    setError('')
-  }
-
-  /**
    * handleExport()
-   * Downloads the full sorted session log as a CSV file. Fields containing
-   * commas or quotes are wrapped in double quotes with embedded quotes escaped
-   * (doubled) to produce valid CSV. Uses a temporary <a> element with an object
-   * URL to trigger the download without leaving the page.
+   * Downloads all records (sorted newest-first by date) as a CSV file. Fields
+   * containing commas or quotes are wrapped in double quotes with embedded
+   * quotes escaped (doubled) to produce valid CSV. Uses a temporary <a> element
+   * with an object URL to trigger the download without leaving the page.
    *
    * Example: produces tuition-hours-2026-08-29.csv with a line like
    *   2026-08-29,"Sara Ahmed","English Literature",10:00,11:30,1.5,"Macbeth themes"
@@ -1095,7 +984,11 @@ export default function App() {
   function handleExport() {
     // Column header row for the exported CSV.
     const header = 'Date,Student,Subject,Start,End,Hours,Notes'
-    // Map each session to a CSV line; quote/escape text fields for safety.
+    // Sort a copy of the records newest-first (latest date/time on top), then
+    // map each record to a CSV line; quote/escape text fields for safety.
+    const sorted = [...records].sort((a, b) =>
+      a.date === b.date ? b.start.localeCompare(a.start) : b.date.localeCompare(a.date),
+    )
     const rows = sorted.map(s =>
       [
         s.date,
@@ -1137,13 +1030,13 @@ export default function App() {
             <p>Log tutoring sessions and see where your teaching time goes.</p>
           </div>
         </div>
-        {/* Export CSV button → handleExport() downloads the full session log.
-            Disabled when sessions.length is 0 (nothing to export yet). */}
+        {/* Export CSV button → handleExport() downloads the records loaded from
+            Google Sheets. Disabled when records.length is 0 (nothing yet). */}
         <button
           className="btn btn-outline"
           type="button"
           onClick={handleExport}
-          disabled={sessions.length === 0}
+          disabled={records.length === 0}
         >
           ⬇ Export CSV
         </button>
@@ -1151,7 +1044,7 @@ export default function App() {
 
       {/* ---- Google Sheets sync status banner ---- */}
       {/* Only rendered when syncStatus is truthy (set by handleSubmit /
-          handleDelete / handleSheetDelete). The `type` drives the CSS class
+          handleSheetDelete). The `type` drives the CSS class
           (sync-saving / sync-ok / sync-error) and the icon:
             type 'saving' → ⏳  "Saving to Google Sheets…"
             type 'ok'     → ✅  "✓ Saved to Google Sheets"
@@ -1169,7 +1062,7 @@ export default function App() {
       {/* Two tabs switch the activeTab state ('dashboard' | 'records'). The
           className uses it for the active highlight and aria-selected is set
           for screen readers. The view rendered below is chosen by:
-            activeTab === 'dashboard' → stats / form / session log / breakdown
+            activeTab === 'dashboard' → stats / add form / breakdown charts
             activeTab === 'records'   → the Google Sheets records table */}
       <nav className="tabs" role="tablist" aria-label="App views">
         <button
@@ -1187,19 +1080,39 @@ export default function App() {
           role="tab"
           aria-selected={activeTab === 'records'}
           className={`tab${activeTab === 'records' ? ' active' : ''}`}
-          // Clicking sets activeTab to 'records', which triggers the fetch effect.
+          // Clicking switches to the records view (the data is already fetched
+          // on mount, so no re-fetch is needed here).
           onClick={() => setActiveTab('records')}
         >
           📋 All Records
-          {/* Badge showing the number of LOCAL sessions (sessions.length).
-              Only rendered when there is at least one session. */}
-          {sessions.length > 0 && <span className="tab-count">{sessions.length}</span>}
+          {/* Badge showing the number of records loaded from Google Sheets.
+              Only rendered when there is at least one record. */}
+          {records.length > 0 && <span className="tab-count">{records.length}</span>}
         </button>
       </nav>
 
       {/* ---- Dashboard view (rendered only when activeTab === 'dashboard') ---- */}
       {activeTab === 'dashboard' && (
         <>
+      {/* ---- Initial load / failure notice ---- */}
+      {/* While the records are being fetched (or if that first fetch failed)
+          and we have nothing to show yet, surface a slim status strip above
+          the stats instead of silently showing zeros. Once records exist the
+          notice disappears. */}
+      {(recordsLoading || recordsError) && records.length === 0 && (
+        <div
+          className={`sync-status ${recordsLoading ? 'sync-saving' : 'sync-error'}`}
+          role="status"
+        >
+          <span className="sync-indicator" aria-hidden="true">
+            {recordsLoading ? '⏳' : '⚠️'}
+          </span>
+          {recordsLoading
+            ? 'Loading your records from Google Sheets…'
+            : 'Could not load records from Google Sheets. Use 🔄 Refresh in All Records to try again.'}
+        </div>
+      )}
+
       {/* ---- Stats cards row ---- */}
       {/* Each StatCard renders { label, value, sub }. The values come from the
           memoized `totals` object and are formatted by formatMinutes():
@@ -1208,31 +1121,28 @@ export default function App() {
             totals.month                → minutes in the current calendar month
           `sub` is the supporting text under each number. */}
       <section className="stats">
-        <StatCard label="Total Hours" value={formatMinutes(totals.total)} sub={`${sessions.length} sessions`} />
+        <StatCard label="Total Hours" value={formatMinutes(totals.total)} sub={`${records.length} sessions`} />
         <StatCard label="This Week" value={formatMinutes(totals.week)} sub="Since Monday" />
         {/* monthLabel(toISODate().slice(0,7)) turns today's "2026-08-29" into
             "August 2026" for the "This Month" card subtitle. */}
         <StatCard label="This Month" value={formatMinutes(totals.month)} sub={monthLabel(toISODate().slice(0, 7))} />
-        {/* Average = total minutes ÷ session count. Guards against dividing by
-            zero when sessions.length is 0 (shows "0m" instead). */}
+        {/* Average = total minutes ÷ record count. Guards against dividing by
+            zero when records.length is 0 (shows "0m" instead). */}
         <StatCard
           label="Avg / Session"
-          value={formatMinutes(sessions.length ? Math.round(totals.total / sessions.length) : 0)}
+          value={formatMinutes(records.length ? Math.round(totals.total / records.length) : 0)}
           sub="per session"
         />
       </section>
 
-      {/* ---- Main layout: form (left) + session log (right) ---- */}
+      {/* ---- Add Session form ---- */}
       <main className="layout">
-        {/* ---- Add / Edit form ---- */}
         {/* onSubmit fires handleSubmit(e) when the user submits. The form is a
             CONTROLLED component: every input's value comes from `form` state
-            and every onChange calls setField() to update it. */}
+            and every onChange calls setField() to update it. Saving writes the
+            new row straight to Google Sheets (the single source of truth). */}
         <form className="card form-card" onSubmit={handleSubmit}>
-          {/* Heading switches between Add and Edit based on editingId:
-              editingId is null → "➕ Add Session"
-              editingId is set  → "✏️ Edit Session" */}
-          <h2>{editingId ? '✏️ Edit Session' : '➕ Add Session'}</h2>
+          <h2>➕ Add Session</h2>
 
           {/* ---- Student field ---- */}
           <div className="field">
@@ -1262,11 +1172,6 @@ export default function App() {
                     {name}
                   </option>
                 ))}
-                {/* Keep the current value as an option so editing an older
-                    session whose student isn't (yet) in the list still works. */}
-                {form.student && !students.includes(form.student) && (
-                  <option value={form.student}>{form.student}</option>
-                )}
               </select>
             ) : (
               /* Fallback free-text input used only when the student list could
@@ -1318,7 +1223,9 @@ export default function App() {
           <div className="field-row">
             <div className="field">
               <label htmlFor="start">Start time</label>
-              <input id="start" type="time" value={form.start} onChange={e => setField('start', e.target.value)} />
+              {/* Changing the start time stores it via handleStartChange(), which
+                  also pre-fills a blank End time with start + 1 hour. */}
+              <input id="start" type="time" value={form.start} onChange={e => handleStartChange(e.target.value)} />
             </div>
             <div className="field">
               <label htmlFor="end">End time</label>
@@ -1357,109 +1264,17 @@ export default function App() {
               non-empty, and cleared automatically as the user types. */}
           {error && <p className="error">{error}</p>}
 
-          {/* ---- Form actions (submit + optional cancel) ---- */}
+          {/* ---- Form actions ---- */}
           <div className="form-actions">
-            {/* Submit button: the label depends on edit mode (editingId). Its
-                type="submit" triggers the form's onSubmit → handleSubmit(). */}
-            <button className="btn btn-primary" type="submit">
-              {editingId ? 'Update Session' : 'Add Session'}
+            {/* Submit button → triggers the form's onSubmit → handleSubmit(),
+                which POSTs the new row to Google Sheets. Disabled while a save
+                is in flight so the session isn't submitted twice. */}
+            <button className="btn btn-primary" type="submit" disabled={syncStatus?.type === 'saving'}>
+              {syncStatus?.type === 'saving' ? 'Saving…' : 'Add Session'}
             </button>
-            {/* Cancel button shown ONLY while editing (editingId truthy).
-                Clicking it calls cancelEdit() to discard the edit. */}
-            {editingId && (
-              <button className="btn btn-outline" type="button" onClick={cancelEdit}>
-                Cancel
-              </button>
-            )}
           </div>
         </form>
 
-        {/* ---- Session Log (local sessions) ---- */}
-        <section className="card list-card">
-          {/* Card header: title + search box. */}
-          <div className="list-head">
-            <h2>Session Log</h2>
-            <div className="search-wrap">
-              <span className="search-icon" aria-hidden="true">🔍</span>
-              {/* Controlled search input: typing updates `search` state, which
-                  recomputes `filtered` (the list actually rendered below). */}
-              <input
-                type="search"
-                placeholder="Search student, subject…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Three-state render:
-              1. filtered is empty AND no sessions at all  → "Add your first one"
-              2. filtered is empty but sessions exist      → "No match for search"
-              3. otherwise                                 → the session list */}
-          {filtered.length === 0 ? (
-            <div className="empty">
-              <span className="empty-icon" aria-hidden="true">📭</span>
-              <p>
-                {sessions.length === 0
-                  ? 'No sessions logged yet. Add your first one on the left!'
-                  : 'No sessions match your search.'}
-              </p>
-            </div>
-          ) : (
-            <ul className="session-list">
-              {/* Render one <li> per session from `filtered` (the search-filtered,
-                  already-sorted sessions). `s` is a full session object with
-                  fields id, student, subject, date, start, end, notes, minutes. */}
-              {filtered.map(s => (
-                // The "editing" class highlights the session currently open in
-                // the form (when editingId matches this session's id).
-                <li key={s.id} className={`session-item${editingId === s.id ? ' editing' : ''}`}>
-                  {/* Day/month badge built from the ISO date string:
-                      s.date = "2026-08-29"
-                        s.date.slice(8)               → "29"   (day)
-                        Number(s.date.slice(5,7)) - 1 → 7      (0-indexed month)
-                        MONTHS[7]                     → "Aug"  */}
-                  <div className="session-date">
-                    <span className="day">{s.date.slice(8)}</span>
-                    <span className="mon">{MONTHS[Number(s.date.slice(5, 7)) - 1]}</span>
-                  </div>
-                  <div className="session-main">
-                    <div className="session-title">
-                      {/* Student name (bold) + subject chip. */}
-                      <strong>{s.student}</strong>
-                      <span className="chip">{s.subject}</span>
-                    </div>
-                    <div className="session-meta">
-                      {/* formatDate() turns the ISO date into "Mon, Aug 29, 2026";
-                          then the raw start–end range; then notes if present. */}
-                      {formatDate(s.date)} · {s.start}–{s.end}
-                      {s.notes && <span className="notes"> · {s.notes}</span>}
-                    </div>
-                  </div>
-                  {/* Duration: formatMinutes(s.minutes), e.g. 90 → "1h 30m". */}
-                  <div className="session-hours">{formatMinutes(s.minutes)}</div>
-                  <div className="session-actions">
-                    {/* Edit button → handleEdit(s) pre-fills the form with this
-                        session's values and enters edit mode. */}
-                    <button className="icon-btn" type="button" title="Edit" onClick={() => handleEdit(s)}>
-                      ✏️
-                    </button>
-                    {/* Delete button → handleDelete(s.id) removes it locally
-                        after a confirmation dialog. */}
-                    <button
-                      className="icon-btn danger"
-                      type="button"
-                      title="Delete"
-                      onClick={() => handleDelete(s.id)}
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
       </main>
 
       {/* ---- Breakdown charts ---- */}
@@ -1504,9 +1319,10 @@ export default function App() {
       )}
 
       {/* ---- All Records view (shown when activeTab === 'records') ---- */}
-      {/* This whole section renders the Google Sheets data. The fetch happens
-          in the useEffect above whenever this tab becomes active or the user
-          clicks Refresh. */}
+      {/* This whole section renders the Google Sheets data. The records are
+          fetched on mount and refreshed via the button below (recordsRefresh
+          bumps the fetch effect above). Only a Delete action is offered — rows
+          are edited directly in Google Sheets. */}
       {activeTab === 'records' && (
         <section className="records">
           <div className="card records-card">
@@ -1528,16 +1344,16 @@ export default function App() {
                     the total fetched from the sheet. Uses "session"/"sessions"
                     for proper pluralisation. */}
                 <span className="records-count">
-                  {visibleRecords.length} of {sheetRecords.length} session
-                  {sheetRecords.length === 1 ? '' : 's'} from Google Sheets
+                  {visibleRecords.length} of {records.length} session
+                  {records.length === 1 ? '' : 's'} from Google Sheets
                 </span>
-                {/* Refresh button → bumps recordsRefresh (n => n + 1), which is
-                    in the fetch effect's dependency array, re-triggering the
-                    fetch. Disabled while a fetch is already in flight. */}
+                {/* Refresh button → refreshRecords() turns the loading state on
+                    and bumps recordsRefresh, which re-runs the fetch effect.
+                    Disabled while a fetch is already in flight. */}
                 <button
                   className="btn btn-outline btn-sm"
                   type="button"
-                  onClick={() => setRecordsRefresh(n => n + 1)}
+                  onClick={refreshRecords}
                   disabled={recordsLoading}
                 >
                   🔄 Refresh
@@ -1552,17 +1368,23 @@ export default function App() {
               </p>
             )}
 
-            {/* Four-state render for the table area:
-                1. recordsLoading && no rows yet        → "Loading…"
-                2. sheetRecords empty (fetched ok)      → "No records found"
-                3. visibleRecords empty after search    → "No match"
-                4. otherwise                            → the full <table> */}
-            {recordsLoading && sheetRecords.length === 0 ? (
+            {/* Five-state render for the table area:
+                1. recordsLoading && no rows yet      → "Loading…"
+                2. fetch failed & nothing loaded      → error message
+                3. records empty (fetched ok)         → "No records found"
+                4. visibleRecords empty after search  → "No match"
+                5. otherwise                          → the full <table> */}
+            {recordsLoading && records.length === 0 ? (
               <div className="empty">
                 <span className="empty-icon" aria-hidden="true">⏳</span>
                 <p>Loading records from Google Sheets…</p>
               </div>
-            ) : sheetRecords.length === 0 ? (
+            ) : recordsError && records.length === 0 ? (
+              <div className="empty">
+                <span className="empty-icon" aria-hidden="true">⚠️</span>
+                <p>Couldn’t load records from Google Sheets. Check your connection, then press 🔄 Refresh.</p>
+              </div>
+            ) : records.length === 0 ? (
               <div className="empty">
                 <span className="empty-icon" aria-hidden="true">📭</span>
                 <p>No records found in Google Sheets yet.</p>
@@ -1629,7 +1451,7 @@ export default function App() {
                   </thead>
                   {/* Body: one <tr> per record in `visibleRecords` (the
                       search-filtered + sorted view of the sheet data). `s` is a
-                      normalised session object with the same shape as local ones. */}
+                      normalised session object in the app's record shape. */}
                   <tbody>
                     {visibleRecords.map(s => (
                       /* The "row-deleting" class fades/animates the row whose
@@ -1653,26 +1475,10 @@ export default function App() {
                           {s.notes || '—'}
                         </td>
                         <td className="td-actions">
-                          {/* Edit button shown ONLY when this record also exists
-                              locally (localIds.has(s.id)) so pre-filling the form
-                              works. Clicking it loads the session into the form
-                              (handleEdit) and jumps to the Dashboard tab. */}
-                          {localIds.has(s.id) && (
-                            <button
-                              className="icon-btn"
-                              type="button"
-                              title="Edit (local copy)"
-                              onClick={() => {
-                                handleEdit(s)
-                                setActiveTab('dashboard')
-                              }}
-                            >
-                              ✏️
-                            </button>
-                          )}
-                          {/* Delete button → handleSheetDelete(s.id) removes the
-                              row from the Google Sheet itself. Disabled while any
-                              other delete is in flight (deletingId). */}
+                          {/* Delete is the ONLY row action — it removes the row
+                              from Google Sheets itself via handleSheetDelete(s.id).
+                              Editing is done directly in the spreadsheet. Disabled
+                              while any delete is in flight (deletingId). */}
                           <button
                             className="icon-btn danger"
                             type="button"
@@ -1695,7 +1501,7 @@ export default function App() {
 
       {/* ---- Footer ---- */}
       <footer className="app-footer">
-        <p>Data is saved locally in your browser. 🛡️</p>
+        <p>Data is stored in Google Sheets. 🛡️</p>
       </footer>
     </div>
   )

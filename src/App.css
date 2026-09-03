@@ -138,10 +138,16 @@
 /* ---------- layout ---------- */
 
 .layout {
+  /* Single centered column: the old Session Log (right column) is gone, so the
+     Add Session card sits on its own with the breakdown charts below it. */
   display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 18px;
-  align-items: start;
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
+.layout .form-card {
+  width: 100%;
+  max-width: 520px;
 }
 
 /* ---------- form ---------- */
