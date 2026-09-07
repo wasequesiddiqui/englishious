@@ -916,16 +916,19 @@ export default function App() {
   /**
    * handleSheetDelete(id)
    * Deletes a record from the Google Sheet itself. Asks for confirmation, then
-   * POSTs { action: 'delete', id } to the Apps Script. On success the row is
-   * removed from `records` (the in-memory mirror of the sheet) so the Dashboard
-   * stats and the All Records table stay in sync. The row is disabled while the
-   * request is in flight.
+   * POSTs { action: 'delete', id } to the Apps Script. On success the deleted
+   * row is removed from `records` (the in-memory mirror of the sheet) AND the
+   * full record list is re-fetched from Google Sheets (via refreshRecords), so
+   * the Dashboard stats and the All Records table always reflect the sheet's
+   * actual, up-to-date contents rather than a stale local copy. The row is
+   * disabled while the request is in flight.
    *
    * @param {string} id - The id of the record to delete from the sheet.
    *
    * Example: the All Records 🗑️ button calls handleSheetDelete(s.id). While the
    * request runs, deletingId = s.id (spinner state); on success the row is
-   * removed from `records`.
+   * removed from `records` and the fetch effect re-runs to pull the current
+   * record list straight from Google Sheets.
    * Wired to the 🗑️ buttons in the All Records table.
    */
   async function handleSheetDelete(id) {
@@ -934,9 +937,12 @@ export default function App() {
     setRecordsError('')
     try {
       await deleteFromSheets(id)
-      // Remove the row from `records` so the Dashboard/All Records stay in sync.
+      // Remove the row locally so the UI responds instantly, then re-fetch the
+      // whole list from the sheet (the source of truth) so every record shown
+      // matches what's actually in Google Sheets right after the delete.
       setRecords(prev => prev.filter(s => s.id !== id))
       setSyncStatus({ type: 'ok', msg: '🗑 Deleted from Google Sheets' })
+      refreshRecords()
     } catch {
       setSyncStatus({ type: 'error', msg: '⚠ Could not delete from Google Sheets' })
       setRecordsError(
