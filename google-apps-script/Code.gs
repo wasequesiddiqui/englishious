@@ -17,6 +17,12 @@
  *  fields: id, date, studentName, fromTime, toTime, subject, notes, minutes.
  *  If your existing sheet has differently-named columns (e.g. "Student Name"),
  *  rename those columns to match, or old rows will show blanks in the app.
+ *
+ *  TEXT NORMALIZATION — studentName, subject and notes are returned and stored
+ *  in canonical form (trimmed, single-spaced, UPPERCASE) so casing variants like
+ *  "Amayra" / "AMAYRA" never split into separate students or subjects. To clean
+ *  historical rows once, run normalizeExistingText() from the Apps Script
+ *  editor (Run menu), then redeploy.
  * ============================================================================
  */
 
@@ -37,6 +43,9 @@ var HEADERS = [
   'timestamp',
   'hours',
 ];
+
+/** Free-text columns that are canonicalized on read and write. */
+var TEXT_HEADERS = ['studentName', 'subject', 'notes'];
 
 /* ---------------------------------------------------------------------------
  * doGet(e)
@@ -71,6 +80,10 @@ function doGet(e) {
       if (obj.date instanceof Date) obj.date = toISODate_(obj.date);
       if (obj.fromTime instanceof Date) obj.fromTime = toTime_(obj.fromTime);
       if (obj.toTime instanceof Date) obj.toTime = toTime_(obj.toTime);
+      // Canonical text so every consumer sees one casing per student/subject.
+      TEXT_HEADERS.forEach(function (h) {
+        if (obj[h] !== undefined) obj[h] = normalizeText_(obj[h]);
+      });
       return obj;
     });
 
@@ -133,9 +146,10 @@ function getSheet_() {
 /**
  * listStudents_()
  * Reads the "Students" tab of the spreadsheet, locates the "Student Names"
- * column by its header, and returns every non-empty value as a de-duplicated
- * list (order preserved). Backs doGet ?action=students so the app can render
- * the Student field as a strict dropdown instead of a free-text box.
+ * column by its header, and returns every non-empty value as a normalized,
+ * de-duplicated list (order preserved). Backs doGet ?action=students so the app
+ * can render the Student field as a strict dropdown instead of a free-text box.
+ * Because names are uppercased first, "Amayra" and "AMAYRA" collapse into one.
  *
  * @returns {GoogleAppsScript.Content.TextOutput} JSON { success, students }.
  */
@@ -153,7 +167,7 @@ function listStudents_() {
     .getRange(2, col, sheet.getLastRow() - 1, 1)
     .getValues()
     .map(function (row) {
-      return String(row[0]).trim();
+      return normalizeText_(row[0]);
     })
     .filter(function (name) {
       return name !== '';
@@ -190,6 +204,9 @@ function ensureHeaders_(sheet) {
 function appendRow_(sheet, data) {
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
   var values = headers.map(function (h) {
+    // Normalize text before it reaches the sheet, so new rows stay canonical
+    // even when written by another client.
+    if (TEXT_HEADERS.indexOf(h) !== -1) return normalizeText_(data[h]);
     return data[h] !== undefined ? data[h] : '';
   });
   sheet.appendRow(values);
@@ -205,6 +222,103 @@ function deleteRowById_(sheet, id) {
       sheet.deleteRow(i + 1);
     }
   }
+}
+
+/**
+ * normalizeText_(value)
+ * Canonical form for free-text values: trim, collapse repeated whitespace, and
+ * uppercase. Mirrors normalizeText() in src/normalize.js so reads/writes from
+ * the app and the backend agree on one form.
+ *
+ * Examples: '  Sara   Ahmed ' → 'SARA AHMED' · null → '' · 42 → '42'
+ */
+function normalizeText_(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+/**
+ * normalizeExistingText()
+ * ONE-OFF MIGRATION — run manually from the Apps Script editor (Run menu after
+ * selecting this function). It is never called by the web app.
+ *
+ *   1. Upper-cases studentName, subject and notes in the Sessions sheet,
+ *      writing only the columns that actually change.
+ *   2. Upper-cases and de-duplicates the "Student Names" column of the
+ *      Students tab, preserving first-seen order. The Students tab is treated
+ *      as a single name list; other columns are left untouched.
+ *
+ * Safe to re-run: once the data is normalized it reports zero changes.
+ */
+function normalizeExistingText() {
+  var sessionCells = 0;
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+
+  if (sheet && sheet.getLastRow() >= 2) {
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+    TEXT_HEADERS.forEach(function (header) {
+      var col = headers.indexOf(header) + 1; // 1-based; 0 when missing
+      if (col < 1) return;
+      var range = sheet.getRange(2, col, sheet.getLastRow() - 1, 1);
+      var values = range.getValues();
+      var changed = 0;
+      var normalized = values.map(function (row) {
+        var original = row[0] === null || row[0] === undefined ? '' : String(row[0]);
+        var next = normalizeText_(row[0]);
+        if (next !== original) changed++;
+        return [next];
+      });
+      if (changed > 0) {
+        range.setValues(normalized);
+        sessionCells += changed;
+      }
+    });
+  }
+
+  var students = normalizeStudentsTab_();
+
+  Logger.log(
+    'normalizeExistingText complete: %s session text cell(s) updated, %s student name cell(s) updated, %s duplicate/blank row(s) removed.',
+    sessionCells,
+    students.cells,
+    students.removed,
+  );
+}
+
+/**
+ * normalizeStudentsTab_()
+ * Helper for normalizeExistingText(): canonicalizes the "Student Names" column
+ * and compacts it to unique names. Returns { cells, removed } counts.
+ */
+function normalizeStudentsTab_() {
+  var result = { cells: 0, removed: 0 };
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Students');
+  if (!sheet || sheet.getLastRow() < 2) return result;
+
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+  var col = headers.indexOf('Student Names') + 1;
+  if (col < 1) return result;
+
+  var range = sheet.getRange(2, col, sheet.getLastRow() - 1, 1);
+  var values = range.getValues();
+  var seen = {};
+  var unique = [];
+
+  values.forEach(function (row) {
+    var original = row[0] === null || row[0] === undefined ? '' : String(row[0]);
+    var name = normalizeText_(row[0]);
+    if (name !== original) result.cells++;
+    if (!name || seen[name]) return;
+    seen[name] = true;
+    unique.push([name]);
+  });
+
+  result.removed = values.length - unique.length;
+  if (result.cells === 0 && result.removed === 0) return result;
+
+  range.clearContent();
+  if (unique.length > 0) sheet.getRange(2, col, unique.length, 1).setValues(unique);
+  return result;
 }
 
 /** Wraps an object as a JSON ContentService response (adds CORS headers). */

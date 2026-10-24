@@ -91,6 +91,57 @@
   background: rgba(225, 29, 72, 0.08);
 }
 
+/* ---------- dashboard loading ---------- */
+
+.dashboard-loading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 14px 18px;
+  border: 1px solid var(--primary);
+  border-radius: 12px;
+  background: var(--primary-soft);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.dashboard-spinner {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--primary);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: dashboard-spin 0.7s linear infinite;
+}
+
+.dashboard-loading-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dashboard-loading-sub {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+@keyframes dashboard-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-spinner {
+    animation: none;
+  }
+}
+
 /* ---------- cards ---------- */
 
 .card {
@@ -636,52 +687,29 @@
   margin-bottom: 14px;
 }
 
+/* Plotly needs a shrinkable container inside the fixed-column grid. */
+.breakdown .card {
+  min-width: 0;
+}
+
+.plotly-chart {
+  width: 100%;
+}
+
+.chart-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .muted {
   color: var(--muted);
   font-size: 14px;
-}
-
-.bar-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.bar-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 90px auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.bar-label {
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.bar-track {
-  height: 8px;
-  background: var(--bg);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--primary), var(--primary-strong));
-  border-radius: 999px;
-}
-
-.bar-value {
-  font-size: 12px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- footer ---------- */
@@ -691,6 +719,434 @@
   margin-top: 28px;
   color: var(--muted);
   font-size: 12px;
+}
+
+/* ---------- matrix / pivot ---------- */
+
+/* Tab panels stay mounted so their local state survives tab switches. */
+.tab-panel[hidden] {
+  display: none;
+}
+
+.pivot {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.pivot-config {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.pivot-config-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pivot-config-head h2 {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.pivot-config-head .muted {
+  font-size: 13px;
+  max-width: 70ch;
+}
+
+.pivot-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.pivot-section-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pivot-section-head h3,
+.pivot-axis h3,
+.pivot-options h3 {
+  font-size: 14px;
+}
+
+.pivot-section-spacer {
+  flex: 1;
+}
+
+.pivot-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pivot-mode {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.pivot-mode button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.pivot-mode button:hover {
+  color: var(--text);
+}
+
+.pivot-mode button.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.pivot-filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pivot-filter-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 150px) minmax(110px, 150px) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.pivot-filter-row select,
+.pivot-filter-row input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.pivot-filter-row select:focus,
+.pivot-filter-row input:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.pivot-filter-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pivot-filter-value input[type='date'] {
+  max-width: 170px;
+}
+
+.pivot-filter-incomplete select,
+.pivot-filter-incomplete input {
+  border-style: dashed;
+}
+
+.pivot-filter-sep {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pivot-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pivot-axes {
+  display: grid;
+  grid-template-columns: 1fr 1fr minmax(190px, 230px);
+  gap: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.pivot-axis {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pivot-axis-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pivot-axis-count {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pivot-axis-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pivot-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 34px;
+}
+
+.pivot-chip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pivot-chip-label {
+  flex: 1;
+}
+
+.pivot-chip button {
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pivot-chip button:hover:not(:disabled) {
+  background: var(--card);
+  color: var(--text);
+}
+
+.pivot-chip button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pivot-chip-empty {
+  padding: 8px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pivot-axis select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.pivot-axis select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pivot-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pivot-options .field {
+  margin-bottom: 4px;
+}
+
+.pivot-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pivot-check input {
+  accent-color: var(--primary);
+}
+
+.pivot-result {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pivot-result-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pivot-result-head h2 {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.pivot-result-head .muted {
+  font-size: 13px;
+}
+
+.pivot-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pivot-heatmap {
+  min-width: 0;
+}
+
+.matrix-wrap {
+  max-height: 70vh;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: auto;
+  /* Sticky cells need a background of their own; keep the container isolated
+     so header z-indexes never escape the scroll area. */
+  isolation: isolate;
+}
+
+.matrix-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.matrix-table th,
+.matrix-table td {
+  padding: 8px 10px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.matrix-table tr > *:last-child {
+  border-right: 0;
+}
+
+.matrix-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.matrix-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.matrix-table thead th {
+  background: var(--card);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  text-align: center;
+}
+
+.matrix-table thead th.matrix-leaf-head {
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+}
+
+.matrix-corner {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  text-align: left !important;
+}
+
+.matrix-corner-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.matrix-row-head {
+  background: var(--card);
+  color: var(--text);
+  font-weight: 600;
+  text-align: left;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.matrix-row-head-sticky {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.matrix-cell {
+  text-align: right;
+  color: var(--text);
+}
+
+.matrix-cell-empty {
+  color: var(--muted);
+}
+
+.matrix-total-head,
+.matrix-total {
+  background: var(--bg);
+  font-weight: 700;
+}
+
+.matrix-grand {
+  font-weight: 800;
+  color: var(--primary-strong);
+}
+
+.matrix-table tfoot > tr > * {
+  border-top: 2px solid var(--border);
+  border-bottom: 0;
 }
 
 /* ---------- responsive ---------- */
@@ -706,6 +1162,14 @@
 
   .breakdown {
     grid-template-columns: 1fr;
+  }
+
+  .pivot-axes {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pivot-options {
+    grid-column: 1 / -1;
   }
 }
 
@@ -729,5 +1193,26 @@
 
   .tab {
     flex: 1;
+  }
+
+  .pivot-axes {
+    grid-template-columns: 1fr;
+  }
+
+  .pivot-filter-row {
+    grid-template-columns: 1fr 1fr auto;
+  }
+
+  .pivot-filter-value {
+    grid-column: 1 / -1;
+  }
+
+  .pivot-filter-row .icon-btn {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .pivot-section-spacer {
+    display: none;
   }
 }

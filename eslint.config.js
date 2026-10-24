@@ -5,7 +5,8 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // `public` holds static assets copied as-is (e.g. the Plotly vendor bundle).
+  globalIgnores(['dist', 'public']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [

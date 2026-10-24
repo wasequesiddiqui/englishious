@@ -15,6 +15,15 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 // App logo shown in the header (bundled by Vite from src/assets).
 import logo from './assets/Logo.png'
+// Shared duration formatter, also used by the Matrix pivot page.
+import { formatMinutes } from './format'
+// Matrix (pivot) analysis page rendered by the third tab.
+import PivotMatrix from './PivotMatrix'
+// Canonical uppercase text for values retrieved from or written to the sheet.
+import { normalizeText } from './normalize'
+// Plotly-backed dashboard charts (Plotly itself is loaded on demand).
+import HorizontalBarChart from './charts/HorizontalBarChart'
+import VerticalBarChart from './charts/VerticalBarChart'
 
 // ---------- Module-level constants ----------
 
@@ -36,8 +45,11 @@ const SHEETS_WEB_APP_URL =
  * SUBJECTS
  * The complete, fixed list of allowed subjects. Rendered into a <select>
  * dropdown so only these options can be chosen (no free-text entry).
+ *
+ * Stored uppercase to match normalizeText() on retrieval, so the dropdown,
+ * the records table, and pivot results all show the same value.
  */
-const SUBJECTS = ['English Literature', 'English Language', 'English General']
+const SUBJECTS = ['ENGLISH LITERATURE', 'ENGLISH LANGUAGE', 'ENGLISH GENERAL']
 
 /* ---------- helpers ---------- */
 
@@ -132,29 +144,6 @@ function addMinutesToTime(time, mins) {
 }
 
 /**
- * formatMinutes(mins)
- * Converts a number of minutes into a compact, human-readable duration string
- * such as "45m", "2h", or "2h 30m" (units are omitted when zero).
- *
- * @param {number} mins - Duration in minutes.
- * @returns {string} Formatted duration label.
- *
- * Examples:
- *   formatMinutes(45)  → "45m"
- *   formatMinutes(120) → "2h"
- *   formatMinutes(150) → "2h 30m"
- * Used everywhere a human-readable duration is shown (stat cards, the All
- * Records table, the live form preview, and the breakdown bars).
- */
-function formatMinutes(mins) {
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}m`
-}
-
-/**
  * toDecimalHours(mins)
  * Converts a minute count to decimal hours rounded to two places, e.g. 90
  * minutes → 1.5. Used for CSV export and the Google Sheets payload, which
@@ -187,8 +176,8 @@ function toDecimalHours(mins) {
  *
  * Example payload sent by handleSubmit():
  *   { action: 'add', id: '…', timestamp: '2026-08-29T10:05:00.000Z',
- *     date: '2026-08-29', studentName: 'Sara Ahmed', fromTime: '10:00',
- *     toTime: '11:30', subject: 'English Literature', notes: '',
+ *     date: '2026-08-29', studentName: 'SARA AHMED', fromTime: '10:00',
+ *     toTime: '11:30', subject: 'ENGLISH LITERATURE', notes: '',
  *     minutes: 90, hours: 1.5 }
  */
 async function postToSheets(payload) {
@@ -235,9 +224,13 @@ async function fetchFromSheets() {
  * up the "Students" tab's "Student Names" column, and return
  * { success: true, students: [...] } (unique, non-empty names).
  *
- * @returns {Promise<Array>} Array of student name strings.
+ * Names are normalized to uppercase and de-duplicated here as well, so casing
+ * or spacing variants in the sheet ("Amayra", "AMAYRA") collapse into a single
+ * dropdown option. The sheet's order is preserved.
  *
- * Example return value: ['Sara Ahmed', 'John Doe', 'Ayesha Khan']
+ * @returns {Promise<Array>} Array of unique, uppercase student name strings.
+ *
+ * Example return value: ['SARA AHMED', 'JOHN DOE', 'AYESHA KHAN']
  */
 async function fetchStudentsFromSheets() {
   const res = await fetch(`${SHEETS_WEB_APP_URL}?action=students`)
@@ -245,7 +238,14 @@ async function fetchStudentsFromSheets() {
   const data = await parseSheetsResponse(res)
   if (!data || !Array.isArray(data.students))
     throw new Error('No valid students returned — check the Apps Script doGet(students) is deployed')
+  const seen = new Set()
   return data.students
+    .map(normalizeText)
+    .filter(name => {
+      if (!name || seen.has(name)) return false
+      seen.add(name)
+      return true
+    })
 }
 
 /**
@@ -335,26 +335,30 @@ function toIsoDateStr(value) {
  * @param {object} row - Raw sheet row object.
  * @returns {object} Normalized session-shaped object.
  *
+ * Text fields (student, subject, notes) are normalized with normalizeText() so
+ * case/spacing variants from the sheet collapse into one value everywhere
+ * downstream (dashboard groups, records table, CSV export, and pivot matrix).
+ *
  * Example: given the raw sheet row
  *   { id: '…', date: '2026-08-29', studentName: 'Sara Ahmed',
  *     fromTime: '10:00', toTime: '11:30', subject: 'English Literature',
  *     notes: 'Macbeth', minutes: 90 }
  * this returns the app's session shape:
- *   { id: '…', student: 'Sara Ahmed', subject: 'English Literature',
+ *   { id: '…', student: 'SARA AHMED', subject: 'ENGLISH LITERATURE',
  *     date: '2026-08-29', start: '10:00', end: '11:30',
- *     notes: 'Macbeth', minutes: 90, createdAt: … }
+ *     notes: 'MACBETH', minutes: 90, createdAt: … }
  */
 function normalizeSheetRecord(row) {
   const start = toTimeStr(row.fromTime || row.start)
   const end = toTimeStr(row.toTime || row.end)
   return {
     id: String(row.id ?? ''),
-    student: row.studentName || row.student || '',
-    subject: row.subject || '',
+    student: normalizeText(row.studentName || row.student),
+    subject: normalizeText(row.subject),
     date: toIsoDateStr(row.date),
     start,
     end,
-    notes: row.notes || '',
+    notes: normalizeText(row.notes),
     minutes: Number(row.minutes) || calcMinutes(start, end),
     createdAt: row.timestamp || Date.now(),
   }
@@ -428,6 +432,21 @@ function monthLabel(monthKey) {
 }
 
 /**
+ * monthShortLabel(monthKey)
+ * Compact "Aug 26" label used on the Monthly Breakdown chart's x axis, so six
+ * month names fit side by side. Hover tooltips still use the full monthLabel.
+ *
+ * @param {string} monthKey - Month in "YYYY-MM" format.
+ * @returns {string} Short month/year label.
+ *
+ * Example: monthShortLabel('2026-08') → "Aug 26"
+ */
+function monthShortLabel(monthKey) {
+  const [y, m] = monthKey.split('-').map(Number)
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
+}
+
+/**
  * startOfCurrentWeekISO()
  * Returns the date of Monday of the current week as an ISO string. The week
  * is considered Monday-first: if today is Sunday, we go back 6 days to the
@@ -495,44 +514,6 @@ function StatCard({ label, value, sub }) {
       <span className="stat-value">{value}</span>
       <span className="stat-sub">{sub}</span>
     </div>
-  )
-}
-
-/**
- * BarList — presentational component
- * Renders a horizontal bar chart from sorted [key, minutes] pairs (the output
- * of aggregateBy). Bar widths are proportional to the largest value so the
- * longest bar always fills the track.
- *
- * @param {object} props
- * @param {Array<[key, mins]>} props.items - Sorted [key, minutes] pairs to render.
- * @param {number} props.max - The largest minute total; used to scale bar widths.
- * @param {Function} props.format - Formats a minute count into a display label.
- * @param {Function} [props.label] - Optional formatter for the bar key (e.g. monthLabel).
- *
- * Example: <BarList items={[['Sara',210],['John',60]]} max={210} format={formatMinutes} />
- * draws two rows; Sara's bar fills 100% of the track, John's fills ~28.5%,
- * with "3h 30m" and "1h" shown on the right of each.
- */
-function BarList({ items, max, format, label }) {
-  return (
-    <ul className="bar-list">
-      {items.map(([key, mins]) => (
-        <li key={key} className="bar-row">
-          {/* Show a formatted label if provided, otherwise the raw key; the
-              title attribute exposes the full key on hover. */}
-          <span className="bar-label" title={label ? label(key) : key}>
-            {label ? label(key) : key}
-          </span>
-          <div className="bar-track">
-            {/* Width scales with mins/max but never dips below 8% so even a
-                small value stays visible. */}
-            <div className="bar-fill" style={{ width: `${Math.max(8, (mins / max) * 100)}%` }} />
-          </div>
-          <span className="bar-value">{format(mins)}</span>
-        </li>
-      ))}
-    </ul>
   )
 }
 
@@ -613,9 +594,9 @@ export default function App() {
   // Banner state for Google Sheets sync, e.g. { type: 'saving'|'ok'|'error', msg }.
   // Rendered as a status strip under the header.
   const [syncStatus, setSyncStatus] = useState(null)
-  // Which top-level tab is visible: 'dashboard' (default) or 'records'.
-  // Toggled by the two tab buttons and read in the JSX to decide which view
-  // to render.
+  // Which top-level tab is visible: 'dashboard' (default), 'records', or
+  // 'matrix'. Toggled by the tab buttons and read in the JSX to decide which
+  // view to render.
   const [activeTab, setActiveTab] = useState('dashboard')
   // Text typed into the All Records search box (filters the fetched records).
   const [recordsSearch, setRecordsSearch] = useState('')
@@ -636,7 +617,7 @@ export default function App() {
   // falls back to a plain text input so logging is never blocked. A `cancelled`
   // flag prevents a stale response from overwriting state after unmount.
   //
-  // Example: on success `students` becomes ['Sara Ahmed','John Doe','Ayesha Khan']
+  // Example: on success `students` becomes ['SARA AHMED','JOHN DOE','AYESHA KHAN']
   // and studentsLoading → false, which switches the Student field from a text
   // input to a <select>.
   useEffect(() => {
@@ -723,8 +704,8 @@ export default function App() {
    *
    * Example shape:
    *   { total: 570, week: 210, month: 480,
-   *     byStudent: [['Sara', 330], ['John', 240]],
-   *     bySubject: [['English Literature', 390], ['English Language', 180]],
+   *     byStudent: [['SARA', 330], ['JOHN', 240]],
+   *     bySubject: [['ENGLISH LITERATURE', 390], ['ENGLISH LANGUAGE', 180]],
    *     byMonth: [['2026-08', 480], ['2026-07', 90]] }
    */
   const totals = useMemo(() => {
@@ -852,17 +833,26 @@ export default function App() {
    *
    * @param {Event} e - The form submit event (prevented to avoid a page reload).
    *
-   * Example: a new session with student "Sara Ahmed", subject "English
-   * Literature", date 2026-08-29, 10:00–11:30 gets minutes 90 and is POSTed to
-   * the sheet as { action: 'add', ... }. On success the session is appended to
+   * Student, subject, and notes are normalized to uppercase before validation
+   * and before the object is built, so new rows are stored in the same
+   * canonical form the retrieval path produces.
+   *
+   * Example: a new session typed as student "Sara Ahmed", subject "English
+   * Literature", notes "Macbeth", date 2026-08-29, 10:00–11:30 becomes
+   * "SARA AHMED" / "ENGLISH LITERATURE" / "MACBETH", gets minutes 90, and is
+   * POSTed to the sheet as { action: 'add', ... }. On success the session is appended to
    * `records` (so the Dashboard reflects it immediately) and the status banner
    * shows "Saving to Google Sheets…" → "✓ Saved to Google Sheets". On failure
    * the form is left intact so the user can retry.
    */
   async function handleSubmit(e) {
     e.preventDefault()
+    // Canonical text first, so validation and storage use the same value.
+    const student = normalizeText(form.student)
+    const subject = normalizeText(form.subject)
+    const notes = normalizeText(form.notes)
     // Basic required-field validation before anything is saved.
-    if (!form.student.trim() || !form.subject.trim() || !form.date || !form.start || !form.end) {
+    if (!student || !subject || !form.date || !form.start || !form.end) {
       setError('Please fill in student, subject, date, and times.')
       return
     }
@@ -874,12 +864,12 @@ export default function App() {
     // Build the session object with a fresh random UUID.
     const session = {
       id: crypto.randomUUID(),
-      student: form.student.trim(),
-      subject: form.subject.trim(),
+      student,
+      subject,
       date: form.date,
       start: form.start,
       end: form.end,
-      notes: form.notes.trim(),
+      notes,
       minutes,
       createdAt: Date.now(),
     }
@@ -984,7 +974,7 @@ export default function App() {
    * with an object URL to trigger the download without leaving the page.
    *
    * Example: produces tuition-hours-2026-08-29.csv with a line like
-   *   2026-08-29,"Sara Ahmed","English Literature",10:00,11:30,1.5,"Macbeth themes"
+   *   2026-08-29,"SARA AHMED","ENGLISH LITERATURE",10:00,11:30,1.5,"MACBETH THEMES"
    * Wired to the "⬇ Export CSV" button in the header.
    */
   function handleExport() {
@@ -1065,11 +1055,13 @@ export default function App() {
       )}
 
       {/* ---- Tab navigation ---- */}
-      {/* Two tabs switch the activeTab state ('dashboard' | 'records'). The
-          className uses it for the active highlight and aria-selected is set
-          for screen readers. The view rendered below is chosen by:
+      {/* Three tabs switch the activeTab state ('dashboard' | 'records' |
+          'matrix'). The className uses it for the active highlight and
+          aria-selected is set for screen readers. The view rendered below is
+          chosen by:
             activeTab === 'dashboard' → stats / add form / breakdown charts
-            activeTab === 'records'   → the Google Sheets records table */}
+            activeTab === 'records'   → the Google Sheets records table
+            activeTab === 'matrix'    → the pivot / matrix analysis page */}
       <nav className="tabs" role="tablist" aria-label="App views">
         <button
           type="button"
@@ -1095,27 +1087,44 @@ export default function App() {
               Only rendered when there is at least one record. */}
           {records.length > 0 && <span className="tab-count">{records.length}</span>}
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'matrix'}
+          className={`tab${activeTab === 'matrix' ? ' active' : ''}`}
+          // The Matrix page works on the records already fetched on mount.
+          onClick={() => setActiveTab('matrix')}
+        >
+          🧮 Matrix
+        </button>
       </nav>
 
       {/* ---- Dashboard view (rendered only when activeTab === 'dashboard') ---- */}
       {activeTab === 'dashboard' && (
         <>
-      {/* ---- Initial load / failure notice ---- */}
-      {/* While the records are being fetched (or if that first fetch failed)
-          and we have nothing to show yet, surface a slim status strip above
-          the stats instead of silently showing zeros. Once records exist the
-          notice disappears. */}
-      {(recordsLoading || recordsError) && records.length === 0 && (
-        <div
-          className={`sync-status ${recordsLoading ? 'sync-saving' : 'sync-error'}`}
-          role="status"
-        >
-          <span className="sync-indicator" aria-hidden="true">
-            {recordsLoading ? '⏳' : '⚠️'}
+      {/* ---- Loading banner ---- */}
+      {/* Shown for the initial load AND for refreshes (recordsLoading is true
+          in both cases), so the Dashboard always explains why its numbers may
+          be stale. The stats and charts stay mounted below the banner. */}
+      {recordsLoading && (
+        <div className="dashboard-loading" role="status" aria-live="polite">
+          <span className="dashboard-spinner" aria-hidden="true" />
+          <span className="dashboard-loading-text">
+            <span>Waiting for data to load…</span>
+            <span className="dashboard-loading-sub">Fetching your sessions from Google Sheets.</span>
           </span>
-          {recordsLoading
-            ? 'Loading your records from Google Sheets…'
-            : 'Could not load records from Google Sheets. Use 🔄 Refresh in All Records to try again.'}
+        </div>
+      )}
+
+      {/* ---- Failure notice ---- */}
+      {/* Only when the fetch failed and there is still nothing to show; a
+          failed background refresh leaves the existing data untouched. */}
+      {!recordsLoading && recordsError && records.length === 0 && (
+        <div className="sync-status sync-error" role="alert">
+          <span className="sync-indicator" aria-hidden="true">
+            ⚠️
+          </span>
+          Could not load records from Google Sheets. Use 🔄 Refresh in All Records to try again.
         </div>
       )}
 
@@ -1185,7 +1194,7 @@ export default function App() {
               <input
                 id="student"
                 type="text"
-                placeholder="e.g. Sara Ahmed"
+                placeholder="e.g. SARA AHMED"
                 value={form.student}
                 onChange={e => setField('student', e.target.value)}
               />
@@ -1196,7 +1205,7 @@ export default function App() {
           <div className="field">
             <label htmlFor="subject">Subject</label>
             {/* Strict dropdown built from the fixed SUBJECTS constant
-                (["English Literature", "English Language", "English General"]).
+                (["ENGLISH LITERATURE", "ENGLISH LANGUAGE", "ENGLISH GENERAL"]).
                 Controlled by form.subject, updated via setField('subject', …). */}
             <select
               id="subject"
@@ -1284,40 +1293,47 @@ export default function App() {
       </main>
 
       {/* ---- Breakdown charts ---- */}
-      {/* Three horizontal bar charts, all powered by the memoized `totals` and
-          the reusable BarList component. Each passes:
-            items  → the [key, minutes] pairs (from totals)
-            max    → the biggest value, so the longest bar fills the track
-            format → formatMinutes (formats the right-hand value)
-            label  → optional key formatter (monthLabel for months) */}
+      {/* Three Plotly charts. Plotly is loaded on demand the first time one of
+          these mounts. Each chart receives the sorted [key, minutes] pairs from
+          the memoized `totals`; the components handle formatting and colors. */}
       <section className="breakdown">
-        <div className="card">
+        <div className="card chart-card">
           <h2>👨‍🎓 Top Students</h2>
           {/* totals.byStudent = top 5 students by total minutes. */}
           {totals.byStudent.length === 0 ? (
             <p className="muted">No data yet.</p>
           ) : (
-            <BarList items={totals.byStudent} max={totals.byStudent[0][1]} format={formatMinutes} />
+            <HorizontalBarChart
+              items={totals.byStudent}
+              ariaLabel="Top students by total session minutes"
+            />
           )}
         </div>
-        <div className="card">
+        <div className="card chart-card">
           <h2>📖 Top Subjects</h2>
           {/* totals.bySubject = top 5 subjects by total minutes. */}
           {totals.bySubject.length === 0 ? (
             <p className="muted">No data yet.</p>
           ) : (
-            <BarList items={totals.bySubject} max={totals.bySubject[0][1]} format={formatMinutes} />
+            <HorizontalBarChart
+              items={totals.bySubject}
+              ariaLabel="Top subjects by total session minutes"
+            />
           )}
         </div>
-        <div className="card">
+        <div className="card chart-card">
           <h2>🗓 Monthly Breakdown</h2>
           {/* totals.byMonth = the 6 most recent months with minutes, newest
-              first. monthLabel is passed as `label` so "2026-08" displays as
-              "August 2026" on each bar. */}
+              first. The axis uses short labels; hover shows the full month. */}
           {totals.byMonth.length === 0 ? (
             <p className="muted">No data yet.</p>
           ) : (
-            <BarList items={totals.byMonth} max={totals.byMonth[0][1]} format={formatMinutes} label={monthLabel} />
+            <VerticalBarChart
+              items={totals.byMonth}
+              label={monthShortLabel}
+              hoverLabel={monthLabel}
+              ariaLabel="Monthly session minutes for the last six months"
+            />
           )}
         </div>
       </section>
@@ -1504,6 +1520,22 @@ export default function App() {
           </div>
         </section>
       )}
+
+      {/* ---- Matrix view (shown when activeTab === 'matrix') ---- */}
+      {/* Pivot analysis over the same records: filters, multi-field row and
+          column grouping, totals, heatmap, CSV export, and clipboard copy.
+          Refresh reuses refreshRecords(), so the sheet stays the source of
+          truth for this view too. */}
+      {/* Kept mounted (only hidden) so a pivot configuration survives a trip
+          to the other tabs and back. */}
+      <div className="tab-panel" hidden={activeTab !== 'matrix'}>
+        <PivotMatrix
+          records={records}
+          loading={recordsLoading}
+          error={recordsError}
+          onRefresh={refreshRecords}
+        />
+      </div>
 
       {/* ---- Footer ---- */}
       <footer className="app-footer">
